@@ -1,0 +1,20 @@
+# 浏览器自动化核心
+playwright
+
+# 任务调度核心
+apscheduler
+
+# 视觉识别辅助
+opencv-python
+
+# Web后端与API服务
+fastapi
+uvicorn
+python-multipart
+websockets
+
+# 数值计算支持
+numpy
+ordered-set
+requests
+pydantic

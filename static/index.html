@@ -1,0 +1,3083 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小红书自动化系统</title>
+    <style>
+        .control-panel { min-height: 0; max-height: 100%; overflow-y: auto; }
+        .data-panel    { min-height: 0; max-height: 100%; overflow-y: auto; }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', Arial, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+            line-height: 1.5;
+        }
+        
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 20px;
+            height: calc(100vh - 40px);
+        }
+        
+        /* 左侧操作面板 */
+        .control-panel {
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            overflow-y: auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        
+        .header h1 {
+            color: #1a1a1a;
+            font-size: 1.8em;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+        
+        .header .subtitle {
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 15px 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #1890ff;
+        }
+        
+        .stat-number {
+            font-size: 1.4em;
+            font-weight: bold;
+            color: #1890ff;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            color: #666;
+            font-size: 0.8em;
+            font-weight: 500;
+        }
+        
+        .function-section {
+            margin-bottom: 20px;
+            padding: 18px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #1890ff;
+            transition: all 0.3s ease;
+        }
+        
+        .function-section:hover {
+            background: #f0f7ff;
+        }
+        
+        .function-section h3 {
+            color: #1a1a1a;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .control-group {
+            margin-bottom: 12px;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 6px;
+            color: #555;
+            font-weight: 500;
+            font-size: 0.85em;
+        }
+        
+        .control-group input, .control-group textarea, .control-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 13px;
+            transition: all 0.3s ease;
+            background: #ffffff;
+        }
+        
+        .control-group input:focus, .control-group textarea:focus, .control-group select:focus {
+            outline: none;
+            border-color: #1890ff;
+            box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+        }
+        
+        .control-group textarea {
+            height: 80px;
+            resize: vertical;
+            font-family: inherit;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+        
+        .btn {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex: 1;
+            justify-content: center;
+        }
+        
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn-primary {
+            background: #1890ff;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #40a9ff;
+        }
+        
+        .btn-success {
+            background: #52c41a;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #73d13d;
+        }
+        
+        .btn-warning {
+            background: #faad14;
+            color: #212529;
+        }
+        
+        .btn-warning:hover {
+            background: #ffc53d;
+        }
+        
+        .btn-danger {
+            background: #ff4d4f;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #ff7875;
+        }
+        
+        .btn-secondary {
+            background: #8c8c8c;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #a6a6a6;
+        }
+        
+        .btn:disabled {
+            background: #d9d9d9;
+            color: #8c8c8c;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        
+        .status-running {
+            background: #52c41a;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-stopped {
+            background: #ff4d4f;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        /* 右侧数据面板 */
+        .data-panel {
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        .data-header {
+            padding: 20px;
+            border-bottom: 1px solid #e8e8e8;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .data-header h2 {
+            color: #1a1a1a;
+            font-size: 1.4em;
+            font-weight: 600;
+        }
+        
+        .bulk-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .selection-info {
+            color: #666;
+            font-size: 0.9em;
+            margin-right: 10px;
+        }
+        
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #e8e8e8;
+            background: #fafafa;
+        }
+        
+        .tab {
+            padding: 12px 20px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .tab:hover {
+            color: #1890ff;
+            background: #f0f7ff;
+        }
+        
+        .tab.active {
+            border-bottom-color: #1890ff;
+            color: #1890ff;
+            font-weight: 600;
+            background: #ffffff;
+        }
+        
+        .tab-content {
+            display: none;
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        .tab-content.active {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .data-container {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .data-toolbar {
+            padding: 15px 20px;
+            border-bottom: 1px solid #e8e8e8;
+            background: #fafafa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .toolbar-left, .toolbar-right {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .data-content {
+            flex: 1;
+            overflow: auto;
+            padding: 0;
+        }
+        
+        .log-container {
+            height: 100%;
+            overflow-y: auto;
+            background: #1f1f1f;
+            color: #e0e0e0;
+            padding: 15px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        
+        .log-entry {
+            margin-bottom: 6px;
+            padding: 6px 10px;
+            border-left: 3px solid transparent;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .log-entry.error {
+            border-left-color: #ff4d4f;
+            color: #ff7875;
+            background: rgba(255, 77, 79, 0.1);
+        }
+        
+        .log-entry.warning {
+            border-left-color: #faad14;
+            color: #ffc53d;
+            background: rgba(250, 173, 20, 0.1);
+        }
+        
+        .log-entry.success {
+            border-left-color: #52c41a;
+            color: #73d13d;
+            background: rgba(82, 196, 26, 0.1);
+        }
+        
+        .log-entry.info {
+            border-left-color: #1890ff;
+            color: #69c0ff;
+            background: rgba(24, 144, 255, 0.1);
+        }
+        
+        .users-list, .videos-list {
+            padding: 0;
+        }
+        
+        .user-item, .video-item {
+            padding: 15px;
+            margin: 0;
+            border-bottom: 1px solid #f0f0f0;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        
+        .user-item:hover, .video-item:hover {
+            background: #f8f9fa;
+        }
+        
+        .user-item.selected, .video-item.selected {
+            background: #f0f7ff;
+            border-left: 4px solid #1890ff;
+        }
+        
+        .checkbox-container {
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+        
+        .checkbox-container input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+        
+        .item-content {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .user-header, .video-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+        
+        .user-name, .video-title {
+            font-weight: 600;
+            color: #1a1a1a;
+            font-size: 1em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .user-meta, .video-meta {
+            font-size: 0.8em;
+            color: #666;
+            margin-bottom: 8px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .user-comment, .video-desc {
+            color: #555;
+            margin: 8px 0;
+            line-height: 1.4;
+            background: rgba(255, 255, 255, 0.7);
+            padding: 8px;
+            border-radius: 4px;
+            border-left: 2px solid #e0e0e0;
+            font-size: 0.85em;
+        }
+
+
+        .status-badge {
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 0.75em;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        
+        .status-pending {
+            background: #fff7e6;
+            color: #d46b08;
+            border: 1px solid #ffd591;
+        }
+        
+        .status-sent {
+            background: #f6ffed;
+            color: #389e0d;
+            border: 1px solid #b7eb8f;
+        }
+        
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 8px 14px;
+            border-radius: 16px;
+            font-size: 0.8em;
+            font-weight: 600;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        .connected {
+            background: #f6ffed;
+            color: #389e0d;
+            border: 1px solid #b7eb8f;
+        }
+        
+        .disconnected {
+            background: #fff2f0;
+            color: #cf1322;
+            border: 1px solid #ffccc7;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #8c8c8c;
+        }
+        
+        .empty-state .icon {
+            font-size: 2.5em;
+            margin-bottom: 12px;
+            opacity: 0.5;
+        }
+        
+        .empty-state h3 {
+            color: #8c8c8c;
+            margin-bottom: 6px;
+            font-size: 1.1em;
+        }
+        
+        .empty-state p {
+            font-size: 0.9em;
+        }
+        
+        /* 选框样式 */
+        #marquee {
+            position: fixed;
+            border: 2px solid #1890ff;
+            background: rgba(24, 144, 255, 0.1);
+            pointer-events: none;
+            z-index: 1000;
+            display: none;
+        }
+        
+        /* 模态框样式 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            width: 90%;
+            max-width: 500px;
+        }
+        
+        .modal-header {
+            margin-bottom: 20px;
+        }
+        
+        .modal-header h3 {
+            color: #1a1a1a;
+            font-size: 1.3em;
+            font-weight: 600;
+        }
+        
+        .modal-body {
+            margin-bottom: 24px;
+        }
+        
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+        
+        .form-group {
+            margin-bottom: 16px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+        
+        .form-group select, .form-group input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .confirmation-input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            text-align: center;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+        
+        .confirmation-input:focus {
+            outline: none;
+            border-color: #1890ff;
+            box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+        }
+        
+        /* 紧凑布局调整 */
+        .compact-control {
+            margin-bottom: 8px;
+        }
+        
+        .advanced-toggle {
+            color: #1890ff;
+            cursor: pointer;
+            font-size: 0.85em;
+            margin-top: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .advanced-content {
+            display: none;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e8e8e8;
+        }
+        
+        .advanced-content.show {
+            display: block;
+        }
+        
+        @media (max-width: 1200px) {
+            .container {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+            
+            .control-panel {
+                max-height: 50vh;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .button-group {
+                flex-direction: column;
+            }
+            
+            .data-toolbar {
+                flex-direction: column;
+                gap: 10px;
+                align-items: stretch;
+            }
+            
+            .toolbar-left, .toolbar-right {
+                justify-content: center;
+            }
+        }
+        .virtual-list {
+            position: relative;
+            overflow-y: auto;
+            height: 100%;
+        }
+
+        .virtual-list-inner {
+            position: relative;
+            width: 100%;
+        }
+
+        .virtual-row {
+            position: absolute;
+            left: 0;
+            width: 100%;
+        }
+
+
+    </style>
+</head>
+<body>
+    <!-- 连接状态 -->
+    <div id="connectionStatus" class="connection-status disconnected">
+        🔴 未连接
+    </div>
+    
+    <!-- 选框元素 -->
+    <div id="marquee"></div>
+    
+    <!-- 清除数据模态框 -->
+    <div id="clearDataModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🗑️ 清除数据</h3>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>清除类型:</label>
+                    <select id="clearDataType">
+                        <option value="videos">视频数据</option>
+                        <option value="users">用户数据</option>
+                        <option value="task_logs">任务日志</option>                       
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>清除范围:</label>
+                    <select id="clearDataScope">
+                        <option value="all">全部数据</option>
+                        <option value="selected">仅选中项</option>
+                        <option value="unsent">仅未发送用户</option>
+                        <option value="sent">仅已发送用户</option>
+                        <option value="days">删除N天及其以前的的数据</option>
+                    </select>
+                </div>
+                <div class="form-group" id="daysInputContainer" style="display: none;">
+                    <label>天数:</label>
+                    <input type="number" id="clearDataDays" value="7" min="1" max="36500">
+                </div>
+                <div class="form-group">
+                    <label>确认操作 (输入 DELETE 确认):</label>
+                    <input type="text" id="clearDataConfirm" class="confirmation-input" placeholder="输入 DELETE">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelClearBtn">取消</button>
+                <button class="btn btn-danger" id="confirmClearBtn" disabled>确认清除</button>
+            </div>
+        </div>
+    </div>
+    <div id="licenseModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><h3>🔐 许可证验证</h3></div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>许可证密钥</label>
+                    <input id="licenseKeyInput" type="text" placeholder="VIP-2025-0001">
+                    <div id="licenseInfo" style="margin-top:6px;color:#666;"></div>
+                </div>
+                <div id="licenseErr" style="color:#cf1322;display:none;margin-top:6px;">激活失败</div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="licenseQuitBtn">退出</button>
+                <button class="btn btn-primary" id="licenseOkBtn">验证并继续</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 免责声明模态框 -->
+    <div id="disclaimerModal" class="modal" style="display:none">
+        
+
+        <div class="modal-content" style="max-width:760px;max-height:80vh;display:flex;flex-direction:column">
+            <div class="modal-header">
+                <h3>📄 使用免责声明</h3>
+            </div>
+            <div class="modal-body" style="overflow:auto">
+                <ol style="margin:0;padding-left:20px;line-height:1.6">
+                    <li>本软件仅提供数据收集以此来学习的辅助能力，<b>不得</b>用于违反《中华人民共和国网络安全法》《互联网信息服务管理办法》及抖音平台用户协议、社区公约的任何行为，包括但不限于：垃圾信息群发、恶意营销、诈骗、骚扰、侵犯隐私、虚假或误导性内容传播、引流欺诈、绕过或削弱平台风控/反滥用机制、对平台接口或数据进行未经授权的抓取与再分发等。</li>
+                    <li>用户须自行确保其操作具备合法、合规、正当的授权与目的，包括但不限于对联系人/收件人取得充分告知与同意、遵守频率与配额限制，不得实施自动化批量骚扰或其他侵权行为。</li>
+                    <li>用户对使用本软件的一切行为及后果承担全部责任。若因违规使用导致抖音账号限制/封禁、法律行政处罚、民事纠纷或第三方索赔，软件开发者不承担任何直接、间接、附带或连带责任。</li>
+                    <li>本软件按“现状”提供，不对获客效果、转化收益、可用性、稳定性作任何明示或默示保证。由此产生的任何损失或风险（含商业、数据、声誉等）由用户自行承担。</li>
+                    <li>本软件不主动采集与处理超出功能必要范围的个人信息。授权密钥与运行日志仅用于本地校验与排障。用户如将日志/数据上传至第三方存储或分析平台，应自行遵守相应合规要求。</li>
+                    <li>如开发者发现用户存在违规或异常风险，有权在不另行通知的情况下暂停或终止其使用权限（含吊销密钥）。</li>
+                    <li>本声明可能根据法律法规及平台规则更新而调整，更新后将即时生效。继续使用即视为接受最新声明。</li>
+                    <li>适用法律与争议解决：本声明的订立、效力、解释、履行及争议解决适用中华人民共和国法律。因本声明引发的或与之有关的争议，由开发者所在地人民法院管辖。</li>
+                    <li>用户下载、安装或使用本软件即表示已充分阅读、理解并同意以上全部内容；如不同意，请立即停止使用并删除软件。</li>
+                    
+                </ol>
+            </div>
+            <div class="modal-footer" style="gap:8px">
+                <button class="btn btn-secondary" id="disclaimerQuitBtn">退出程序</button>
+                <button class="btn btn-primary" id="disclaimerAckBtn">我已知晓</button>
+            </div>
+        </div>
+    </div>
+    <!-- 手动添加视频模态框 -->
+    <div id="addVideoModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>➕ 手动添加视频</h3>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>视频链接（必填）</label>
+                    <input id="manualVideoUrl" type="text" placeholder="https://www.xiaohongshu.com/video/xxxx">
+                </div>
+
+                <div class="form-group">
+                    <label>视频标题（可选）</label>
+                    <input id="manualVideoDesc" type="text" placeholder="视频标题">
+                </div>
+
+                <div class="form-group">
+                    <label>关键词（可选）</label>
+                    <input id="manualVideoKeyword" type="text" placeholder="如：切尔西 加纳">
+                </div>
+
+                <div class="form-group">
+                    <label>作者昵称（可选）</label>
+                    <input id="manualVideoAuthor" type="text">
+                </div>
+
+                <div class="form-group">
+                    <label>点赞数（可选）</label>
+                    <input id="manualVideoLike" type="number" value="0">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="closeAddVideoModalBtn">取消</button>
+                <button class="btn btn-primary" id="confirmAddVideoBtn">添加</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- 左侧操作面板 -->
+        <div class="control-panel">
+            <div class="header">
+                <h1>🎯 小红书自动化系统</h1>
+                <p class="subtitle">智能获客与营销自动化</p>
+            </div>
+            
+            <!-- 系统状态统计 -->
+            <div hidden class="stats-grid">
+                <div hidden class="stat-item">
+                    <span class="stat-number" id="totalUsers">0</span>
+                    <span class="stat-label">总用户</span>
+                </div>
+                <div hidden class="stat-item">
+                    <span class="stat-number" id="pendingUsers">0</span>
+                    <span class="stat-label">待发送</span>
+                </div>
+                <div hidden class="stat-item">
+                    <span class="stat-number" id="sentUsers">0</span>
+                    <span class="stat-label">已发送</span>
+                </div>
+                <div hidden class="stat-item">
+                    <span class="stat-number" id="todayUsers">0</span>
+                    <span class="stat-label">今日新增</span>
+                </div>
+            </div>
+            
+            <!-- 系统控制 -->
+            <div hidden class="function-section">
+                <h3>🚀 系统控制</h3>
+                <div class="button-group">
+                    <button class="btn btn-primary" id="startBrowserBtn">
+                        🖥️ 启动浏览器
+                    </button>
+                    <button class="btn btn-danger" id="stopAllServicesBtn">
+                        🛑 停止所有
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 随机点赞 -->
+            <div hidden class="function-section">
+                <h3>
+                    👍 随机点赞
+                    <span class="status-indicator status-stopped" id="likeStatusIndicator"></span>
+                </h3>
+                <div class="control-group compact-control">
+                    <label>运行时间 (分钟):</label>
+                    <input type="number" id="likeDuration" value="10" min="1" max="1200">
+                </div>
+                <div class="control-group compact-control">
+                <label>点赞频率 (%):</label>
+                <input type="number" id="likeFrequency" value="60" min="0" max="100">
+                </div>
+                <div class="button-group">
+                    <button class="btn btn-success" id="startLikeBtn">
+                        🚀 开始
+                    </button>
+                    <button class="btn btn-danger" id="stopLikeBtn">
+                        🛑 停止
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 阶段一：视频采集 -->
+            <div hidden class="function-section">
+                <h3>
+                    📹 阶段一：视频采集
+                    <span class="status-indicator status-stopped" id="stage1StatusIndicator"></span>
+                </h3>
+                <div class="control-group compact-control">
+                    <label>内容关键词:</label>
+                    <input type="text" id="contentKeywords" placeholder="产品 服务 咨询">
+                </div>
+                <div class="control-group compact-control">
+                    <label>采集界面:</label>
+                    <select id="sortType">
+                        <option value="视频">视频</option>
+                        <option value="综合">综合</option>
+                    </select>
+                </div>
+                <div class="advanced-toggle" onclick="toggleAdvanced('stage1Advanced')">
+                    ⚙️ 高级选项
+                </div>
+                <div class="advanced-content" id="stage1Advanced">
+                    <div class="control-group compact-control">
+                        <label>每个关键词视频数(数量会有上下浮动):</label>
+                        <input type="number" id="videosPerKeyword" value="5" min="1" max="65536">
+                    </div>
+                    <div class="control-group compact-control">
+                        <label>运行时间 (分钟):</label>
+                        <input type="number" id="stage1Duration" value="10" min="1" max="1200">
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button class="btn btn-success" id="startStage1Btn">
+                        🚀 开始采集
+                    </button>
+                    <button class="btn btn-danger" id="stopStage1Btn">
+                        🛑 停止
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 阶段二：用户采集 -->
+            <div hidden class="function-section">
+                <h3>
+                    👥 阶段二：用户采集
+                    <span class="status-indicator status-stopped" id="stage2StatusIndicator"></span>
+                </h3>
+                <div class="control-group compact-control">
+                    <label>用户评论关键词:</label>
+                    <input type="text" id="userCommentKeywords" placeholder="咨询 了解 购买">
+                </div>
+                <div class="advanced-toggle" onclick="toggleAdvanced('stage2Advanced')">
+                    ⚙️ 高级选项
+                </div>
+                <div class="advanced-content" id="stage2Advanced">
+                    <div class="control-group compact-control">
+                        <label>IP归属地关键词:</label>
+                        <input type="text" id="ipKeywords" placeholder="北京 上海 广州">
+                    </div>
+                    <div class="control-group compact-control">
+                        <label>运行时间 (分钟):</label>
+                        <input type="number" id="stage2Duration" value="10" min="1" max="1200">
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button class="btn btn-success" id="startStage2Btn">
+                        🚀 开始采集
+                    </button>
+                    <button class="btn btn-danger" id="stopStage2Btn">
+                        🛑 停止
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 私信功能 -->
+            <div hidden class="function-section">
+                <h3>
+                    💌 私信功能
+                    <span class="status-indicator status-stopped" id="messageStatusIndicator"></span>
+                </h3>
+                <div class="control-group compact-control">
+                    <label>私信模板:</label>
+                    <textarea id="messageTemplate">您好，看到您的评论，很高兴认识您！</textarea>
+                </div>
+                <div class="advanced-toggle" onclick="toggleAdvanced('messageAdvanced')">
+                    ⚙️ 高级选项
+                </div>
+                <div class="advanced-content" id="messageAdvanced">
+                    <div class="control-group compact-control">
+                        <label>运行时间 (分钟):</label>
+                        <input type="number" id="messageDuration" value="10" min="1" max="1200">
+                    </div>
+                    <div class="control-group compact-control">
+                        <label>每人间隔 (秒):</label>
+                        <input type="number" id="messageInterval" value="4" min="1" max="60">
+                    </div>
+                    <div class="control-group compact-control">
+                        <label>
+                            <input type="checkbox" id="rotateAccounts">
+                            多账号轮询（A→B→C… ）
+                        </label>
+                    </div>
+                    <div class="control-group compact-control">
+                        <label>账号根目录:</label>
+                        <input id="accountsRoot" type="text" placeholder="例如：D:\DouyinProfiles 或 /Users/me/DouyinProfiles">
+                    </div>
+
+                    <div class="button-group" style="margin-top:6px">
+                        <button class="btn btn-secondary" id="scanAccountsBtn">📂 从根目录扫描子文件夹</button>
+                        <button class="btn btn-secondary" id="loadAccountsBtn">📥 读取已保存</button>
+                        <button class="btn btn-warning"   id="saveAccountsBtn">💾 保存当前列表</button>
+
+                        <button class="btn btn-success" id="createAndLoginBtn">➕ 新建并扫码并保存</button>
+                    </div>
+
+                    <div class="control-group compact-control" id="accountDirsBox" style="display:none">
+                        <label>账号数据目录（每行一个）:</label>
+                        <textarea id="accountDirs" placeholder="例如：
+                            C:\DouyinProfiles\accA
+                            C:\DouyinProfiles\accB
+                            C:\DouyinProfiles\accC">
+                        </textarea>
+                    </div>
+
+
+                </div>
+                <div class="button-group">
+                    <button class="btn btn-success" id="startMessageBtn">
+                        🚀 开始发送
+                    </button>
+                    <button class="btn btn-danger" id="stopMessageBtn">
+                        🛑 停止
+                    </button>
+                </div>
+            </div>
+            <!-- 小红书：打开首页 + 采集 -->
+            <div class="function-section">
+                <h3>📕 采集视频/笔记</h3>
+
+                <div class="button-group" style="margin-bottom:10px;">
+                    <button class="btn btn-secondary" onclick="openXhsHome()">打开小红书首页</button>
+                </div>
+
+                <div class="control-group compact-control">
+                    <label>关键词（空格隔开）:</label>
+                    <input type="text" id="xhsKeywords" placeholder="美妆 护肤 旅行">
+                </div>
+
+                <div class="control-group compact-control">
+                    <label>采集模式:</label>
+                    <select id="xhsSortType">
+                        <option value="综合">综合</option>
+                        <option hidden value="笔记">笔记</option>
+                        <option hidden value="视频">视频</option>
+                    </select>
+                </div>
+
+                <div class="control-group compact-control">
+                    <label>每词采集数量:</label>
+                    <input type="number" id="xhsPerKeyword" value="5" min="1" max="200">
+                </div>
+
+                <div class="control-group compact-control">
+                    <label>运行时间 (分钟):</label>
+                    <input type="number" id="xhsDuration" value="10" min="1" max="1200">
+                </div>
+
+                <div class="button-group">
+                    <button class="btn btn-success" id="xhsCollectStartBtn">🚀 开始采集</button>
+                    <button class="btn btn-danger" id="xhsCollectStopBtn">🛑 停止</button>
+                </div>
+            </div>
+            <!-- 小红书：对勾选视频/笔记发表评论 -->
+            <div class="function-section">
+                <h3>📕 对勾选视频/笔记发表评论</h3>
+                <div class="control-row">
+                    <div class="control-group">
+                        <label>评论文本 / 模板（多行=多模板，随机抽一条）:</label>
+                        <textarea id="xhsCmtText" rows="4" placeholder="填写评论内容，支持多行"></textarea>
+                    </div>
+                    <div class="control-group compact-control">
+                        <label>同一笔记连续评论条数:</label>
+                        <input id="xhsCmtPerNote" type="number" value="1" min="1" max="5">
+                    </div>
+                    <div class="control-group compact-control">
+                        <label>间隔最小 (分钟):</label>
+                        <input id="xhsCmtIntervalMin" type="number" value="3" min="1" max="20000">
+                    </div>
+                    <div class="control-group compact-control">
+                        <label>间隔最大 (分钟):</label>
+                        <input id="xhsCmtIntervalMax" type="number" value="4" min="1" max="30000">
+                    </div>
+                    <div class="control-group compact-control">
+                        <label><input type="checkbox" id="xhsCmtSkipDup" checked> 已发相同文本则跳过</label>
+                    </div>
+                    <div class="control-group compact-control">
+                        <label><input type="checkbox" id="xhsCmtVariant" checked> 文本变体（随机点号+表情）</label>
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button class="btn btn-success" id="xhsCmtStartBtn">🚀 对勾选发布评论</button>
+                    <button class="btn btn-danger" id="xhsCmtStopBtn">🛑 停止</button>
+                </div>
+            </div>
+            <!-- 小红书：监听勾选视频/笔记的新评论并自动回复 -->
+            <div class="function-section">
+                <h3>📕 监听评论并自动回复</h3>
+
+                <div class="control-group compact-control">
+                    <label>匹配关键词（空格分隔；留空=任意）:</label>
+                    <input id="xhsWatchKeywords" type="text" placeholder="比如：怎么下单 价格 咨询">
+                </div>
+
+                <div class="control-group compact-control">
+                    <label>IP归属地过滤（空格分隔；留空=任意）:</label>
+                    <input id="xhsWatchIp" type="text" placeholder="比如：北京 上海 广州">
+                </div>
+
+                <div class="control-group">
+                    <label>回复模板（多行=多模板，随机抽一条）:</label>
+                    <textarea id="xhsWatchText" rows="4" placeholder="谢谢关注～&#10;具体想了解哪块儿？"></textarea>
+                </div>
+
+                <div class="control-group compact-control">
+                    <label>同一用户去重时长（小时）:</label>
+                    <input id="xhsWatchDedupHours" type="number" value="720" min="1" max="7200">
+                </div>
+                <div class="control-group compact-control">
+                    <label><input type="checkbox" id="xhsWatchVariant" checked> 回复文本变体（随机点号+表情）</label>
+                </div>
+                <div class="control-group compact-control">
+                    <label>仅回复指定时间后的评论（留空=全部）:</label>
+                    <input id="xhsWatchAfterExpr" type="text" placeholder="例：昨天 15:00 / 3天前 / 2025-12-01 09:30">
+                </div>
+
+                <div class="control-row">
+                    <div class="control-group compact-control">
+                        <label>回复间隔最小 (分钟):</label>
+                        <input id="xhsWatchIntervalMin" type="number" value="2" min="1" max="20000">
+                    </div>
+                    <div class="control-group compact-control">
+                        <label>回复间隔最大 (分钟):</label>
+                        <input id="xhsWatchIntervalMax" type="number" value="4" min="1" max="30000">
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn btn-success" id="xhsWatchStartBtn">🚀 监听并自动回复（对勾选项）</button>
+                    <button class="btn btn-danger"  id="xhsWatchStopBtn">🛑 停止监听</button>
+                </div>
+            </div>
+
+        </div>
+        
+        <!-- 右侧数据面板 -->
+        <div class="data-panel">
+            <div class="data-header">
+                <h2>📊 数据监控</h2>
+                <div class="bulk-actions">
+                    <button class="btn btn-danger" id="clearDataBtn">
+                        点我并输入DELETE
+                            清除数据
+                    </button>
+                </div>
+            </div>
+            
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('logs',this)">📝 系统日志</div>
+                <div class="tab" onclick="switchTab('videos',this)">📹 视频列表</div>
+                <div  class="tab" onclick="switchTab('users',this)">👥 用户列表（已回复的用户）</div>
+            </div>
+            
+            <div class="data-container">
+                <!-- 系统日志 -->
+                <div id="logsTab" class="tab-content active">
+                    <div class="data-toolbar">
+                        <div class="toolbar-left">
+                            <button class="btn btn-secondary" id="clearLogsBtn">清空日志</button>
+                        </div>
+                    </div>
+                    <div class="data-content">
+                        <div class="log-container" id="logContainer">
+                            <div class="log-entry info">等待系统连接...</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 视频列表 -->
+                <div id="videosTab" class="tab-content">
+                    <div class="data-toolbar">
+                        <div class="toolbar-left">
+                            <span class="selection-info" id="videosSelectionInfo">已选 0 项</span>
+                            <button class="btn btn-secondary" id="selectAllVideosBtn">全选视频</button>
+                            <button class="btn btn-secondary" id="clearVideosSelectionBtn">清空选择</button>
+                            <!-- <button hidden class="btn btn-primary" id="stage2WithSelectedBtn"hidden>
+                                🧲 用选中视频采集用户
+                            </button> -->
+                            <button class="btn btn-success" id="openAddVideoModalBtn">
+                                ➕ 手动添加视频
+                            </button>
+                            <!-- 先不要这个功能吧 -->
+                            <!-- <button class="btn btn-secondary" id="enrichSelectedVideosBtn">
+                                🔍 获取选中视频详细数据
+                            </button> -->
+                        </div>
+                        <div class="toolbar-right">
+                            <select id="videoSort" style="padding:6px 10px;border:1px solid #e8e8e8;border-radius:6px;margin-right:8px;">
+                                <option value="time">按采集时间</option>
+                                <option value="publish">按发布时间</option>
+                                <option value="like">按点赞数</option>
+
+                            </select>
+                           <button class="btn btn-secondary" id="refreshVideosBtn">刷新</button>
+                        </div>
+                    </div> 
+                    <div class="data-content">
+                        <div class="videos-list" id="videosList">
+                            <div class="empty-state">
+                                <div class="icon">📹</div>
+                                <h3>暂无视频数据</h3>
+                                <p>请先运行采集功能</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 用户列表 -->
+                <div id="usersTab" class="tab-content">
+                    <div class="data-toolbar">
+                        <div class="toolbar-left">
+                            <span class="selection-info" id="usersSelectionInfo">已选 0 项</span>
+                            <button class="btn btn-secondary" id="selectAllUsersBtn">全选用户</button>
+                            <button class="btn btn-secondary" id="clearUsersSelectionBtn">清空选择</button>
+                            <button hidden class="btn btn-primary" hidden id="sendToSelectedBtn" style="display: none;">
+                                💌 对选中用户发私信
+                            </button>
+                        </div>
+                        <div class="toolbar-right">
+                            <select id="userSort" style="padding:6px 10px;border:1px solid #e8e8e8;border-radius:6px;margin-right:8px;">
+                                <option value="time">按采集时间</option>
+                                <option value="publish">按评论发布时间</option>
+                                <option value="ip">按ip归属地</option>
+                            </select>
+                            <button class="btn btn-secondary" id="refreshUsersBtn">刷新</button>
+                        </div>
+                    </div>
+                    <div class="data-content">
+                        <div class="users-list" id="usersList">
+                            <div class="empty-state">
+                                <div class="icon">👥</div>
+                                <h3>暂无用户数据</h3>
+                                <p>请先运行阶段二用户采集功能</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let ws = null;
+        let reconnectInterval = null;
+        let selectedVideos = new Set();
+        let selectedUsers = new Set();
+        let lastClickedIndex = -1;
+        let isMarqueeSelecting = false;
+        let marqueeStart = { x: 0, y: 0 };
+        let marqueeEnd = { x: 0, y: 0 };
+        let isShiftPressed = false;
+        let isAltPressed = false;
+        
+        // 服务状态
+        let likeRunning = false;
+        let stage1Running = false;
+        let stage2Running = false;
+        let messageRunning = false;
+        let browserRunning = false;
+        let __appStarted = false;
+        // 初始化
+
+        function showLic(){ const m=document.getElementById('licenseModal'); if(m) m.style.display='flex'; }
+        function hideLic(){ const m=document.getElementById('licenseModal'); if(m) m.style.display='none'; }
+        function showDisclaimer(){ 
+            const m=document.getElementById('disclaimerModal'); 
+            if(m) m.style.display='flex'; 
+            if (typeof lockAllMainButtons==='function') lockAllMainButtons(true);
+        }
+        function hideDisclaimer(){ 
+            const m=document.getElementById('disclaimerModal'); 
+            if(m) m.style.display='none'; 
+            if (typeof lockAllMainButtons==='function') lockAllMainButtons(false);
+        }
+
+        // —— 免责声明按钮绑定 —— 
+        function bindDisclaimerUI(){
+            const ack=document.getElementById('disclaimerAckBtn');
+            const quit=document.getElementById('disclaimerQuitBtn');
+            if (ack) ack.onclick = () => {
+                try{ localStorage.setItem('disclaimerAck','true'); }catch(_){}
+                hideDisclaimer();
+                if (!__appStarted) { __appStarted = true; initializeApp(); }
+            };
+            if (quit) quit.onclick = () => { try{ fetch('/api/app/quit',{method:'POST'}) }catch(e){} window.close(); };
+        }        
+
+        async function showLicenseModalAlways(){
+            let okBtn = document.getElementById('licenseOkBtn');
+            let info  = document.getElementById('licenseInfo');
+            let input = document.getElementById('licenseKeyInput');
+
+            try{
+                const r = await fetch('/api/license/status');
+                const j = await r.json();
+                const d = (j && j.data) ? j.data : {};
+
+                // 预填上次 key
+                if (d.key) input.value = d.key;
+
+                // 优先使用 lic_exp（真实到期），没有则回退 token_exp/exp
+                const licExp = Number(d.lic_exp || d.license_exp || 0);
+                const tokExp = Number(d.token_exp || d.exp || 0);
+                const nowSec = Math.floor(Date.now() / 1000);
+
+                // 只在“未过期”时显示 +1h；已过期则显示真实到期
+                const licExpired = (licExp > 0 && nowSec >= licExp);
+                const tsSec = licExp > 0
+                ? (licExpired ? licExp : (licExp + 3600))
+                : (tokExp > 0 ? tokExp : 0);
+
+                const tsTxt  = tsSec ? (new Date(tsSec * 1000).toLocaleString()) : '';
+                const expired = (d.expired === true) ||
+                                (licExp > 0 && nowSec >= licExp) ||
+                                (licExp <= 0 && tokExp > 0 && nowSec >= tokExp);
+                if (expired) {
+                    info.textContent = tsTxt ? ('已到期，过期时间：' + tsTxt) : '已到期';
+                    okBtn.textContent = '验证并继续';
+                    okBtn.onclick = doActivate;
+                } else if (d.valid === true) {
+                    info.textContent = tsTxt ? ('已授权，过期时间：' + tsTxt) : '已授权';
+                    okBtn.textContent = '继续使用';
+                    if (!localStorage.getItem('disclaimerAck')) {
+                        okBtn.onclick = () => { hideLic(); bindDisclaimerUI(); showDisclaimer(); };
+                    }
+                } else {
+                    info.textContent = '未授权或会话已失效，请输入密钥后验证';
+                    okBtn.textContent = '验证并继续';
+                    okBtn.onclick = doActivate;
+                }
+            } catch(e){
+                info.textContent = '无法获取授权状态，请输入密钥后验证';
+                okBtn.textContent = '验证并继续';
+                okBtn.onclick = doActivate;
+            }
+            showLic();
+        }
+        async function doActivate(){
+            const key = (document.getElementById('licenseKeyInput').value||'').trim();
+            const err = document.getElementById('licenseErr');
+            err.style.display='none';
+            if(!key){ err.textContent='请输入密钥'; err.style.display='block'; return; }
+
+            try{
+                const r = await fetch('/api/license/activate?key='+encodeURIComponent(key), {method:'POST'});
+                const j = await r.json();
+                if (j.status==='success'){
+                    // 成功：隐藏授权框 -> 弹用户须知（首次激活也会弹）
+                    hideLic();
+                    bindDisclaimerUI();
+                    showDisclaimer();
+                }else{
+                    // 失败：提示并立刻退出后端 + 关闭前端窗口
+                    err.textContent='激活失败：'+(j.message||'');
+                    err.style.display='block';
+                    try{ await fetch('/api/app/quit', {method:'POST'}) }catch(e){}
+                    window.close();
+                }
+            }catch(e){
+                err.textContent='激活失败：'+e.message;
+                err.style.display='block';
+                try{ await fetch('/api/app/quit', {method:'POST'}) }catch(_){}
+                window.close();
+            }
+        }
+
+
+        // —— 页面加载：总是弹授权窗（通过/继续使用后 → 免责声明 → 我已知晓 → initializeApp） ——
+        document.addEventListener('DOMContentLoaded', async function() {
+            bindLicenseUI();
+            await showLicenseModalAlways();
+        });
+
+        // ⬇ 页面加载：始终弹授权框（有效则“继续使用”，无效则“验证并继续”）
+        function lockAllMainButtons(lock){
+            const ids = [
+                'startBrowserBtn','stopAllServicesBtn','startLikeBtn','stopLikeBtn',
+                'startStage1Btn','stopStage1Btn','startStage2Btn','stopStage2Btn',
+                'startMessageBtn','stopMessageBtn','stage2WithSelectedBtn','sendToSelectedBtn',
+                'xhsCmtStartBtn','xhsCmtStopBtn',
+                'clearDataBtn','refreshVideosBtn','refreshUsersBtn','selectAllVideosBtn',
+                'clearVideosSelectionBtn','selectAllUsersBtn','clearUsersSelectionBtn'
+            ];
+
+            ids.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.disabled = !!lock;
+            });
+        }
+
+        function bindLicenseUI(){
+            const okBtn=document.getElementById('licenseOkBtn');
+            const qBtn=document.getElementById('licenseQuitBtn');
+            // 初始默认让“确定”去 doActivate，showLicenseModalAlways 会按状态覆盖它
+            if (okBtn) okBtn.onclick = doActivate;
+            if (qBtn) qBtn.onclick = () => { try{ fetch('/api/app/quit',{method:'POST'}) }catch(e){} window.close(); };
+        }
+
+        function initializeApp() {
+            // 从localStorage加载选择状态
+            loadSelectionFromStorage();
+            
+            // 绑定事件监听器
+            bindEventListeners();
+            
+            // 初始化选框
+            initializeMarquee();
+            
+            // 连接WebSocket
+            connectWebSocket();
+            
+            // 初始化数据
+            refreshStats();
+            refreshVideos();
+            refreshUsers();
+            
+            // 设置定期刷新
+            setInterval(refreshStats, 2000);
+            setInterval(refreshVideos, 3000);
+            setInterval(refreshUsers, 3000);
+            
+            // 更新选择信息
+            updateSelectionInfo();
+            startLicenseHeartbeat();
+        }
+        
+        function bindEventListeners() {
+            // 手动添加视频
+            const openAddVideoModalBtn = document.getElementById('openAddVideoModalBtn');
+            if (openAddVideoModalBtn) openAddVideoModalBtn.onclick = () => {
+                document.getElementById('addVideoModal').style.display = 'flex';
+            };
+
+            const closeAddVideoModalBtn = document.getElementById('closeAddVideoModalBtn');
+            if (closeAddVideoModalBtn) closeAddVideoModalBtn.onclick = () => {
+                document.getElementById('addVideoModal').style.display = 'none';
+            };
+
+            // 确认添加视频
+            const confirmAddVideoBtn = document.getElementById('confirmAddVideoBtn');
+            if (confirmAddVideoBtn) confirmAddVideoBtn.onclick = async () => {
+                const url = document.getElementById('manualVideoUrl').value.trim();
+                const desc = document.getElementById('manualVideoDesc').value.trim();
+                const kw = document.getElementById('manualVideoKeyword').value.trim();
+                const author = document.getElementById('manualVideoAuthor').value.trim();
+                const like = document.getElementById('manualVideoLike').value.trim();
+
+                if (!url) {
+                    addLog("❌ 视频链接不能为空", "error");
+                    return;
+                }
+
+                const result = await apiCall("/api/videos/add_manual", {
+                    body: JSON.stringify({
+                        video_url: url,
+                        video_desc: desc,
+                        keyword: kw,
+                        author_name: author,
+                        like_count: Number(like)
+                    })
+                });
+
+                if (result.status === "success") {
+                    addLog("✅ 视频已添加", "success");
+                    document.getElementById('addVideoModal').style.display = 'none';
+                    refreshVideos();
+                } else {
+                    addLog("❌ 添加失败：" + result.message, "error");
+                }
+            };
+            // —— 获取选中视频详细数据 —— 
+            const enrichSelectedVideosBtn = document.getElementById('enrichSelectedVideosBtn');
+            if (enrichSelectedVideosBtn) {
+                enrichSelectedVideosBtn.onclick = async () => {
+                    // 没选视频，直接提示
+                    if (selectedVideos.size === 0) {
+                        addLog('❌ 请先勾选至少一个视频', 'error');
+                        return;
+                    }
+
+                    const videoUrls = [...selectedVideos];
+
+                    addLog(`🔍 开始为 ${videoUrls.length} 个选中视频获取详细数据`, 'info');
+
+                    try {
+                        const result = await apiCall('/api/videos/enrich_details', {
+                            body: JSON.stringify({
+                                video_urls: videoUrls
+                            })
+                        });
+
+                        if (result.status === 'success') {
+                            addLog(`✅ ${result.message || '获取视频详细数据任务已触发'}`, 'success');
+                            // 获取完之后刷新一次视频列表
+                            await refreshVideos();
+                        } else {
+                            addLog(`❌ 获取视频详细数据失败: ${result.message || '未知错误'}`, 'error');
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        addLog('❌ 获取视频详细数据请求异常', 'error');
+                    }
+                };
+            }
+
+            // 绑定所有按钮的防抖事件
+            const videoSortSel = document.getElementById('videoSort');
+
+            
+            const userSortSel = document.getElementById('userSort');
+            
+            // document.getElementById('videoSort')?.addEventListener('change', refreshVideos);
+            // document.getElementById('userSort')?.addEventListener('change', refreshUsers);
+            document.getElementById('videoSort')?.addEventListener('change', (e) => {
+                e.stopPropagation();
+                refreshVideos();
+            });
+            document.getElementById('userSort')?.addEventListener('change', (e) => {
+                e.stopPropagation();
+                refreshUsers();
+            });
+            const startBrowserBtn = document.getElementById('startBrowserBtn');
+            if (startBrowserBtn) startBrowserBtn.onclick = (e) => withBtnLock(e.currentTarget, startBrowser);
+            // 放在 index.html 里你现有的“按钮统一绑定”块内，和其它按钮绑定保持相同写法
+            const xhsCollectStartBtn = document.getElementById('xhsCollectStartBtn');
+            if (xhsCollectStartBtn) xhsCollectStartBtn.onclick = (e) => withBtnLock(e.currentTarget, startXhsCollect);
+
+            const xhsCollectStopBtn = document.getElementById('xhsCollectStopBtn');
+            if (xhsCollectStopBtn) xhsCollectStopBtn.onclick = (e) => withBtnLock(e.currentTarget, stopXhsCollect);
+            // —— 小红书：对勾选视频/笔记发表评论 ——
+            const xhsCmtStartBtn = document.getElementById('xhsCmtStartBtn');
+            if (xhsCmtStartBtn) xhsCmtStartBtn.onclick = (e) => withBtnLock(e.currentTarget, startXhsCommentOnSelectedVideos);
+            const xhsCmtStopBtn = document.getElementById('xhsCmtStopBtn');
+            if (xhsCmtStopBtn) xhsCmtStopBtn.onclick = (e) => withBtnLock(e.currentTarget, stopXhsComment);
+            // —— 小红书：监听评论并自动回复 —— 
+            const xhsWatchStartBtn = document.getElementById('xhsWatchStartBtn');
+            if (xhsWatchStartBtn) xhsWatchStartBtn.onclick = (e) => withBtnLock(e.currentTarget, startXhsReplyWatch);
+
+            const xhsWatchStopBtn = document.getElementById('xhsWatchStopBtn');
+            if (xhsWatchStopBtn) xhsWatchStopBtn.onclick = (e) => withBtnLock(e.currentTarget, stopXhsReplyWatch);
+
+            const stopAllServicesBtn = document.getElementById('stopAllServicesBtn');
+            if (stopAllServicesBtn) stopAllServicesBtn.onclick = (e) => withBtnLock(e.currentTarget, stopAllServices);
+            
+            const startLikeBtn = document.getElementById('startLikeBtn');
+            if (startLikeBtn) startLikeBtn.onclick = (e) => withBtnLock(e.currentTarget, startRandomLike);
+            
+            const stopLikeBtn = document.getElementById('stopLikeBtn');
+            if (stopLikeBtn) stopLikeBtn.onclick = (e) => withBtnLock(e.currentTarget, stopRandomLike);
+            
+            const startStage1Btn = document.getElementById('startStage1Btn');
+            if (startStage1Btn) startStage1Btn.onclick = (e) => withBtnLock(e.currentTarget, startStage1CollectVideos);
+            
+            const stopStage1Btn = document.getElementById('stopStage1Btn');
+            if (stopStage1Btn) stopStage1Btn.onclick = (e) => withBtnLock(e.currentTarget, stopStage1CollectVideos);
+            
+            const startStage2Btn = document.getElementById('startStage2Btn');
+            if (startStage2Btn) startStage2Btn.onclick = (e) => withBtnLock(e.currentTarget, startStage2CollectUsers);
+            
+            const stopStage2Btn = document.getElementById('stopStage2Btn');
+            if (stopStage2Btn) stopStage2Btn.onclick = (e) => withBtnLock(e.currentTarget, stopStage2CollectUsers);
+            async function loadSavedAccounts() {
+                try {
+                const resp = await fetch('/api/accounts/saved');
+                const j = await resp.json();
+                if (j.status === 'success') {
+                document.getElementById('accountDirs').value = (j.data || []).join('\n');
+                addLog('已载入已保存账号列表', 'success');
+                } else {
+                addLog('读取已保存账号列表失败: ' + (j.message || ''), 'error');
+                }
+            } catch (e) {
+                addLog('读取已保存账号列表异常: ' + e, 'error');
+            }
+            }
+            async function ensureRootFilled() {
+                const input = document.getElementById('accountsRoot');
+                let root = (input?.value || '').trim();
+                if (!root) {
+                    try {
+                        const resp = await fetch('/api/accounts/default_root');
+                        const j = await resp.json();
+                        if (j.status === 'success' && j.data) {
+                            input.value = j.data;
+                            root = j.data;
+                            addLog('📁 已自动创建账号根目录：' + j.data, 'success');
+                        } else {
+                            addLog('无法初始化账号根目录：' + (j.message || ''), 'error');
+                        }
+                    } catch (e) {
+                        addLog('初始化账号根目录异常：' + e, 'error');
+                    }
+                }
+                return root;
+            }
+            async function scanAccounts() {
+            try {
+                const root = await ensureRootFilled();
+                if (!root) { alert('无法初始化账号根目录'); return; }
+                const resp = await fetch('/api/accounts/list?root=' + encodeURIComponent(root));
+
+                const j = await resp.json();
+                if (j.status === 'success') {
+                document.getElementById('accountDirs').value = (j.data || []).join('\n');
+                addLog(`扫描完成，共发现 ${ (j.data || []).length } 个子目录`, 'success');
+                } else {
+                addLog('扫描失败: ' + (j.message || ''), 'error');
+                }
+            } catch (e) {
+                addLog('扫描异常: ' + e, 'error');
+            }
+            }
+
+            async function saveAccounts() {
+            try {
+                const raw = document.getElementById('accountDirs').value || '';
+                const profiles = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+                const resp = await fetch('/api/accounts/save', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ profiles })
+                });
+                const j = await resp.json();
+                if (j.status === 'success') {
+                addLog(j.message || '保存成功', 'success');
+                } else {
+                addLog('保存失败: ' + (j.message || ''), 'error');
+                }
+            } catch (e) {
+                addLog('保存异常: ' + e, 'error');
+            }
+            }
+            async function loginThisAccount() {
+                try {
+                    const ta = document.getElementById('accountDirs');
+                    if (!ta) { addLog('找不到账号列表输入框', 'error'); return; }
+
+                    // 取光标所在行
+                    const val = ta.value || '';
+                    const pos = ta.selectionStart ?? 0;
+                    const start = val.lastIndexOf('\n', Math.max(0, pos - 1)) + 1;
+                    const end = (val.indexOf('\n', pos) === -1) ? val.length : val.indexOf('\n', pos);
+                    const line = val.slice(start, end).trim();
+                    if (!line) { alert('请把光标放在需要扫码登录的“那一行目录”上'); return; }
+
+                    const resp = await fetch('/api/accounts/open', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ dir: line })
+                    });
+                    const j = await resp.json();
+                    if (j.status === 'success') {
+                        addLog(j.message || '✅ 已切换并打开浏览器，请在新窗口扫码', 'success');
+                    } else {
+                        addLog('❌ ' + (j.message || '打开失败'), 'error');
+                    }
+                } catch (e) {
+                    addLog('❌ 执行扫码登录失败：' + e, 'error');
+                }
+            }
+
+            async function createAndLogin() {
+                try {
+                    const root = await ensureRootFilled();
+                    if (!root) { alert('无法初始化账号根目录'); return; }
+                    const resp = await fetch('/api/accounts/create', {
+
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ root })
+                    });
+                    const j = await resp.json();
+                    if (j.status === 'success') {
+                        addLog(j.message || '✅ 已创建目录并打开浏览器扫码', 'success');
+                        await loadSavedAccounts();   // 刷新文本框为最新保存列表
+                    } else {
+                        addLog('❌ ' + (j.message || '创建/打开失败'), 'error');
+                    }
+                } catch (e) {
+                    addLog('❌ 创建并扫码失败：' + e, 'error');
+                }
+            }
+
+            /* 绑定按钮 */
+            document.getElementById('scanAccountsBtn') .addEventListener('click', scanAccounts);
+            document.getElementById('loadAccountsBtn') .addEventListener('click', loadSavedAccounts);
+            document.getElementById('saveAccountsBtn') .addEventListener('click', saveAccounts);
+            // document.getElementById('loginThisAccountBtn').addEventListener('click', loginThisAccount);
+            document.getElementById('createAndLoginBtn').addEventListener('click', createAndLogin);
+            /* 页面加载时尝试加载已保存账号列表（可选，不影响原有逻辑） */
+            document.addEventListener('DOMContentLoaded', () => {
+            loadSavedAccounts().catch(()=>{});
+            });
+            const startMessageBtn = document.getElementById('startMessageBtn');
+            if (startMessageBtn) startMessageBtn.onclick = (e) => withBtnLock(e.currentTarget, startSendMessages);
+            const rotateAccounts = document.getElementById('rotateAccounts');
+            const accountDirsBox = document.getElementById('accountDirsBox');
+            if (rotateAccounts && accountDirsBox) {
+                rotateAccounts.addEventListener('change', () => {
+                    accountDirsBox.style.display = rotateAccounts.checked ? 'block' : 'none';
+                });
+            }
+
+            const stopMessageBtn = document.getElementById('stopMessageBtn');
+            if (stopMessageBtn) stopMessageBtn.onclick = (e) => withBtnLock(e.currentTarget, stopSendMessages);
+            
+            const stage2WithSelectedBtn = document.getElementById('stage2WithSelectedBtn');
+            if (stage2WithSelectedBtn) stage2WithSelectedBtn.onclick = (e) => withBtnLock(e.currentTarget, startStage2WithSelectedVideos);
+            
+            const sendToSelectedBtn = document.getElementById('sendToSelectedBtn');
+            if (sendToSelectedBtn) sendToSelectedBtn.onclick = (e) => withBtnLock(e.currentTarget, startSendMessagesToSelectedUsers);
+            
+            // 批量操作按钮
+            const selectAllBtn = document.getElementById('selectAllBtn');
+            if (selectAllBtn) selectAllBtn.onclick = selectAll;
+            
+            const clearSelectionBtn = document.getElementById('clearSelectionBtn');
+            if (clearSelectionBtn) clearSelectionBtn.onclick = clearSelection;
+            
+            const clearDataBtn = document.getElementById('clearDataBtn');
+            if (clearDataBtn) clearDataBtn.onclick = showClearDataModal;
+            
+            // 视频特定按钮
+            const selectAllVideosBtn = document.getElementById('selectAllVideosBtn');
+            if (selectAllVideosBtn) selectAllVideosBtn.onclick = selectAllVideos;
+            
+            const clearVideosSelectionBtn = document.getElementById('clearVideosSelectionBtn');
+            if (clearVideosSelectionBtn) clearVideosSelectionBtn.onclick = clearVideosSelection;
+            
+            const refreshVideosBtn = document.getElementById('refreshVideosBtn');
+            if (refreshVideosBtn) refreshVideosBtn.onclick = refreshVideos;
+            
+            // 用户特定按钮
+            const selectAllUsersBtn = document.getElementById('selectAllUsersBtn');
+            if (selectAllUsersBtn) selectAllUsersBtn.onclick = selectAllUsers;
+            
+            const clearUsersSelectionBtn = document.getElementById('clearUsersSelectionBtn');
+            if (clearUsersSelectionBtn) clearUsersSelectionBtn.onclick = clearUsersSelection;
+            
+            const refreshUsersBtn = document.getElementById('refreshUsersBtn');
+            if (refreshUsersBtn) refreshUsersBtn.onclick = refreshUsers;
+            
+            const clearLogsBtn = document.getElementById('clearLogsBtn');
+            if (clearLogsBtn) clearLogsBtn.onclick = clearLogs;
+            
+            // 模态框按钮
+            const cancelClearBtn = document.getElementById('cancelClearBtn');
+            if (cancelClearBtn) cancelClearBtn.onclick = hideClearDataModal;
+            
+            const confirmClearBtn = document.getElementById('confirmClearBtn');
+            if (confirmClearBtn) confirmClearBtn.onclick = confirmClearData;
+            
+            // 模态框输入监听
+            const clearDataConfirm = document.getElementById('clearDataConfirm');
+            if (clearDataConfirm) clearDataConfirm.addEventListener('input', validateClearConfirmation);
+            
+            const clearDataScope = document.getElementById('clearDataScope');
+            if (clearDataScope) clearDataScope.addEventListener('change', toggleDaysInput);
+            
+            // 键盘事件
+            document.addEventListener('keydown', handleKeyDown);
+            document.addEventListener('keyup', handleKeyUp);
+            
+            // 设置项目选择监听
+            setTimeout(setupItemSelection, 1000);
+            startLicenseHeartbeat();
+        }
+        function startLicenseHeartbeat(){
+            // 每 30 秒检查一次（你也可以调成 60 秒）
+            setInterval(async ()=>{
+                try{
+                    const r = await fetch('/api/license/status');
+                    const j = await r.json();
+                    const d = (j && j.data) ? j.data : {};
+                    const licExp = Number(d.lic_exp || d.license_exp || 0);
+                    const tokExp = Number(d.token_exp || d.exp || 0);
+                    const nowSec = Math.floor(Date.now()/1000);
+                    const expired = (d.expired === true) ||
+                                    (licExp > 0 && nowSec >= licExp) ||
+                                    (tokExp > 0 && nowSec >= tokExp);
+
+                    if (expired || d.valid !== true) {
+                        if (typeof lockAllMainButtons==='function') lockAllMainButtons(true);
+                        await showLicenseModalAlways();
+                    }
+                }catch(_){}
+            }, 30000);
+        }
+        function initializeMarquee() {
+            const marquee = document.getElementById('marquee');
+            const videosList = document.getElementById('videosList');
+            const usersList = document.getElementById('usersList');
+            
+            [videosList, usersList].forEach(container => {
+                if (container) {
+                    container.addEventListener('mousedown', startMarqueeSelection);
+                    container.addEventListener('mousemove', updateMarqueeSelection);
+                    container.addEventListener('mouseup', endMarqueeSelection);
+                }
+            });
+            
+            // 防止选框触发文本选择
+            document.addEventListener('selectstart', function(e) {
+                if (isMarqueeSelecting) {
+                    e.preventDefault();
+                }
+            });
+        }
+        
+        // 选框选择功能
+        function startMarqueeSelection(e) {
+            if (e.button !== 0) return; // 只处理左键
+            if (e.target.type === 'checkbox') return; // 复选框点击不触发选框
+            
+            isMarqueeSelecting = true;
+            isAltPressed = e.altKey;
+            
+            const rect = e.currentTarget.getBoundingClientRect();
+            marqueeStart.x = e.clientX - rect.left;
+            marqueeStart.y = e.clientY - rect.top;
+            marqueeEnd.x = marqueeStart.x;
+            marqueeEnd.y = marqueeStart.y;
+            
+            const marquee = document.getElementById('marquee');
+            marquee.style.display = 'block';
+            marquee.style.left = marqueeStart.x + 'px';
+            marquee.style.top = marqueeStart.y + 'px';
+            marquee.style.width = '0px';
+            marquee.style.height = '0px';
+            
+            e.preventDefault();
+        }
+        
+        function updateMarqueeSelection(e) {
+            if (!isMarqueeSelecting) return;
+            
+            const rect = e.currentTarget.getBoundingClientRect();
+            marqueeEnd.x = e.clientX - rect.left;
+            marqueeEnd.y = e.clientY - rect.top;
+            
+            const marquee = document.getElementById('marquee');
+            const left = Math.min(marqueeStart.x, marqueeEnd.x);
+            const top = Math.min(marqueeStart.y, marqueeEnd.y);
+            const width = Math.abs(marqueeEnd.x - marqueeStart.x);
+            const height = Math.abs(marqueeEnd.y - marqueeStart.y);
+            
+            marquee.style.left = left + 'px';
+            marquee.style.top = top + 'px';
+            marquee.style.width = width + 'px';
+            marquee.style.height = height + 'px';
+            
+            // 实时更新选择
+            updateSelectionFromMarquee(e.currentTarget, left, top, width, height);
+        }
+        
+        function endMarqueeSelection(e) {
+            if (!isMarqueeSelecting) return;
+            
+            isMarqueeSelecting = false;
+            document.getElementById('marquee').style.display = 'none';
+            
+            // 保存选择状态
+            saveSelectionToStorage();
+            updateSelectionInfo();
+        }
+        
+        function updateSelectionFromMarquee(container, left, top, width, height) {
+            const marqueeRect = { left, top, right: left + width, bottom: top + height };
+            const items = container.querySelectorAll('.user-item, .video-item');
+            const currentTab = document.querySelector('.tab.active').getAttribute('onclick').includes('videos') ? 'videos' : 'users';
+            
+            items.forEach((item, index) => {
+                const rect = item.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+                const itemRect = {
+                    left: rect.left - containerRect.left,
+                    top: rect.top - containerRect.top,
+                    right: rect.right - containerRect.left,
+                    bottom: rect.bottom - containerRect.top
+                };
+                
+                // 检测矩形相交
+                const intersects = !(marqueeRect.right < itemRect.left || 
+                                   marqueeRect.left > itemRect.right || 
+                                   marqueeRect.bottom < itemRect.top || 
+                                   marqueeRect.top > itemRect.bottom);
+                
+                if (intersects) {
+                    const key = item.querySelector('input[type="checkbox"]')?.dataset.key;
+                    if (key) {
+                        if (isAltPressed) {
+                            // Alt键按下，取消选择
+                            if (currentTab === 'videos') {
+                                selectedVideos.delete(key);
+                            } else {
+                                selectedUsers.delete(key);
+                            }
+                        } else {
+                            // 正常选择
+                            if (currentTab === 'videos') {
+                                selectedVideos.add(key);
+                            } else {
+                                selectedUsers.add(key);
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // 更新UI
+            reapplySelection(currentTab);
+        }
+        
+        // 选择持久化功能
+        function loadSelectionFromStorage() {
+            try {
+                const savedVideos = localStorage.getItem('selectedVideos');
+                const savedUsers = localStorage.getItem('selectedUsers');
+                
+                if (savedVideos) {
+                    selectedVideos = new Set(JSON.parse(savedVideos));
+                }
+                if (savedUsers) {
+                    selectedUsers = new Set(JSON.parse(savedUsers));
+                }
+            } catch (e) {
+                console.error('加载选择状态失败:', e);
+            }
+        }
+        
+        function saveSelectionToStorage() {
+            try {
+                localStorage.setItem('selectedVideos', JSON.stringify([...selectedVideos]));
+                localStorage.setItem('selectedUsers', JSON.stringify([...selectedUsers]));
+            } catch (e) {
+                console.error('保存选择状态失败:', e);
+            }
+        }
+        
+        function reapplySelection(type) {
+            const container = type === 'videos' ? document.getElementById('videosList') : document.getElementById('usersList');
+            const selectedSet = type === 'videos' ? selectedVideos : selectedUsers;
+            
+            if (!container) return;
+            
+            // 虚拟列表：只更新可见区，因为不可见区没有 DOM
+            const rows = container.querySelectorAll('.virtual-row');
+
+            rows.forEach(row => {
+                const checkbox = row.querySelector('input[type="checkbox"]');
+                if (!checkbox) return;
+
+                const key = checkbox.dataset.key;
+                const checked = selectedSet.has(key);
+
+                checkbox.checked = checked;
+
+                // 更新行的选中样式
+                if (checked) row.classList.add('selected');
+                else row.classList.remove('selected');
+            });
+
+            
+            // 更新特定选择信息
+            if (type === 'videos') {
+                updateVideosSelectionInfo();
+            } else {
+                updateUsersSelectionInfo();
+            }
+        }
+        // 统一把已删除/已不在列表中的 id 从 selectedSets 里移除，保持集合与当前数据一致
+        function reconcileSelection(type) {
+            if (type === 'videos') {
+                const currentIds = new Set((window.__videosList || []).map(v => String(v.id)));
+                selectedVideos = new Set([...selectedVideos].filter(id => currentIds.has(String(id))));
+                if (typeof videosListVirtual !== 'undefined') videosListVirtual.update();
+                saveSelectionToStorage?.();
+                updateVideosSelectionInfo?.();
+            } else {
+                const currentIds = new Set((window.__usersList || []).map(u => String(u.id)));
+                selectedUsers = new Set([...selectedUsers].filter(id => currentIds.has(String(id))));
+                if (typeof usersListVirtual !== 'undefined') usersListVirtual.update();
+                saveSelectionToStorage?.();
+                updateUsersSelectionInfo?.();
+            }
+        }
+
+        // 批量选择功能
+        function selectAll() {
+            const currentTab = document.querySelector('.tab.active').getAttribute('onclick').includes('videos') ? 'videos' : 'users';
+            if (currentTab === 'videos') {
+                selectAllVideos();
+            } else {
+                selectAllUsers();
+            }
+        }
+        
+        function selectAllVideos() {
+            selectedVideos = new Set(window.__videosList.map(v => String(v.id)));
+            videosListVirtual.update();
+            saveSelectionToStorage();
+            updateVideosSelectionInfo();
+        }
+
+        
+        function selectAllUsers() {
+            selectedUsers = new Set(window.__usersList.map(u => String(u.id)));
+            usersListVirtual.update();
+            saveSelectionToStorage();
+            updateUsersSelectionInfo();
+        }
+
+        
+        function clearSelection() {
+            const currentTab = document.querySelector('.tab.active').getAttribute('onclick').includes('videos') ? 'videos' : 'users';
+            if (currentTab === 'videos') {
+                clearVideosSelection();
+            } else {
+                clearUsersSelection();
+            }
+        }
+        
+        function clearVideosSelection() {
+            selectedVideos.clear();
+            reapplySelection('videos');
+            saveSelectionToStorage();
+            updateVideosSelectionInfo();
+        }
+        
+        function clearUsersSelection() {
+            selectedUsers.clear();
+            reapplySelection('users');
+            saveSelectionToStorage();
+            updateUsersSelectionInfo();
+        }
+        
+        function updateSelectionInfo() {
+            const currentTab = document.querySelector('.tab.active')
+                .getAttribute('onclick')
+                .includes('videos') ? 'videos' : 'users';
+            if (currentTab === 'videos') {
+                updateVideosSelectionInfo();
+            } else {
+                updateUsersSelectionInfo();
+            }
+        }
+        
+        function updateVideosSelectionInfo() {
+            document.getElementById('videosSelectionInfo').textContent = `已选 ${selectedVideos.size} 项`;
+        }
+        
+        function updateUsersSelectionInfo() {
+            document.getElementById('usersSelectionInfo').textContent = `已选 ${selectedUsers.size} 项`;
+        }
+        
+        // 键盘事件处理
+        function handleKeyDown(e) {
+            if (e.key === 'Shift') {
+                isShiftPressed = true;
+            }
+            if (e.key === 'Alt') {
+                isAltPressed = true;
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+                e.preventDefault();
+                selectAll();
+            }
+            if (e.key === 'Escape') {
+                clearSelection();
+            }
+        }
+        
+        function handleKeyUp(e) {
+            if (e.key === 'Shift') {
+                isShiftPressed = false;
+            }
+            if (e.key === 'Alt') {
+                isAltPressed = false;
+            }
+        }
+        
+        // 清除数据功能
+        // 清除数据功能
+        function showClearDataModal() {
+            const modal          = document.getElementById('clearDataModal');
+            const typeSelect     = document.getElementById('clearDataType');
+            const scopeSelect    = document.getElementById('clearDataScope');
+            const daysInput      = document.getElementById('clearDataDays');
+            const daysContainer  = document.getElementById('daysInputContainer');
+            const confirmInput   = document.getElementById('clearDataConfirm');
+            const confirmBtn     = document.getElementById('confirmClearBtn');
+
+            if (!modal || !typeSelect || !scopeSelect || !confirmInput || !confirmBtn) {
+                return;
+            }
+
+            // 1）根据当前 Tab 自动设置类型：在视频页就默认“视频数据”，在用户页就默认“用户数据”
+            const videosTabActive = document.getElementById('videosTab')?.classList.contains('active');
+            typeSelect.value = videosTabActive ? 'videos' : 'users';
+
+            // 2）根据是否有选中项，自动设置范围：有选中就默认“仅选中项”，否则“全部数据”
+            if (typeSelect.value === 'videos') {
+                scopeSelect.value = selectedVideos.size > 0 ? 'selected' : 'all';
+            } else if (typeSelect.value === 'users') {
+                scopeSelect.value = selectedUsers.size > 0 ? 'selected' : 'all';
+            } else {
+                scopeSelect.value = 'all';
+            }
+
+            // 3）默认天数（如果没填过）
+            if (daysInput && !daysInput.value) {
+                daysInput.value = '7';
+            }
+
+            // 4）根据 scope 决定是否展示“天数”输入框
+            if (daysContainer) {
+                daysContainer.style.display = scopeSelect.value === 'days' ? 'block' : 'none';
+            }
+
+            // 5）重置确认输入
+            confirmInput.value = '';
+            confirmBtn.disabled = true;
+
+            // 6）最后再显示弹窗
+            modal.style.display = 'flex';
+        }
+
+        
+        function hideClearDataModal() {
+            document.getElementById('clearDataModal').style.display = 'none';
+        }
+        
+        function toggleDaysInput() {
+            const scope = document.getElementById('clearDataScope').value;
+            const daysContainer = document.getElementById('daysInputContainer');
+            daysContainer.style.display = scope === 'days' ? 'block' : 'none';
+        }
+        
+        function validateClearConfirmation() {
+            const input = document.getElementById('clearDataConfirm');
+            const button = document.getElementById('confirmClearBtn');
+            button.disabled = input.value !== 'DELETE';
+        }
+        
+        async function confirmClearData() {
+            const type  = document.getElementById('clearDataType').value;   // 'videos' | 'users' | 'task_logs'
+            let scope = document.getElementById('clearDataScope').value;  // 'all' | 'selected' | 'days' | 'sent' | 'unsent'
+            if (type === 'users') {
+            const map = {
+                'sent-users': 'sent',
+                'only-sent-users': 'sent',
+                'unsent-users': 'unsent',
+                'only-unsent-users': 'unsent',
+                'pending-users': 'unsent'
+            };
+            scope = map[scope] || scope;   // 未命中保持原值
+            }
+            const days  = parseInt(document.getElementById('clearDataDays').value || '7', 10);
+            const selectedIds = type === 'videos'
+                ? [...selectedVideos]           // video_url 字符串
+                : (type === 'users' ? [...selectedUsers] : []); // user_url 字符串
+
+            const url = `/api/${type}`;
+
+
+            // 2) 二次确认（输入框里必须是 DELETE）
+            const confirmInput = document.getElementById('clearDataConfirm');
+            if (!confirmInput || confirmInput.value !== "DELETE") {
+                alert('请输入 DELETE 确认操作');
+                return;
+            }
+
+
+            const payload = {
+                scope: scope,
+                ids: scope === 'selected' ? selectedIds : undefined,
+                days: scope === 'days' ? days : undefined
+            };
+
+            try {
+                // 6) 发 DELETE + JSON（一定要带 Content-Type）
+                const resp = await fetch(url, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await resp.json();
+
+                if (resp.ok && data?.status === 'success') {
+                    // 写日志
+                    addLog(`🗑 清除成功：${data.message}`, 'success');
+                    hideClearDataModal();
+                    // 成功后刷新对应列表 + 清空已选
+                    if (type === 'videos') {
+                        selectedVideos.clear();
+                        if (typeof videosListVirtual !== 'undefined') videosListVirtual.update();
+                        if (typeof refreshVideos === 'function') refreshVideos();
+                        updateVideosSelectionInfo?.();
+                    } else if (type === 'users') {
+                        selectedUsers.clear();
+                        if (typeof usersListVirtual !== 'undefined') usersListVirtual.update();
+                        if (typeof refreshUsers === 'function') refreshUsers();
+                        updateUsersSelectionInfo?.();
+                    } else if (type === 'task_logs') {
+                        // 你若有日志面板，清一下
+                        document.getElementById('logContainer')?.querySelector('.log-content')?.replaceChildren();
+                    }
+                    saveSelectionToStorage?.();
+                    updateVideosSelectionInfo?.();
+                    updateUsersSelectionInfo?.();
+
+                } else {
+                    addLog(`❌ 清除失败：${data?.message || resp.statusText}`, 'error');
+
+                }
+            } catch (err) {
+                addLog(`❌ 清除失败：${String(err)}`, 'error');
+
+            }
+        }
+                
+        // 工具函数
+        function toggleAdvanced(id) {
+            const element = document.getElementById(id);
+            element.classList.toggle('show');
+        }
+        
+        function switchTab(tabName,el) {
+            // 隐藏所有标签内容
+            document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
+
+            // document.querySelectorAll('.tab-content').forEach(tab => {
+            //     tab.classList.remove('active');
+            // });
+            if (el) el.classList.add('active');
+            // 移除所有标签的激活状态
+            // document.querySelectorAll('.tab').forEach(tab => {
+            //     tab.classList.remove('active');
+            // });
+            
+            // 显示选中的标签内容
+            document.querySelectorAll('.tab-content').forEach(p => p.classList.remove('active'));
+
+            document.getElementById(`${tabName}Tab`).classList.add('active');
+        }
+        
+        function clearLogs() {
+            document.getElementById('logContainer').innerHTML = '';
+            addLog('📝 日志已清空', 'info');
+        }
+        
+        // 按钮防抖锁定函数
+        async function withBtnLock(btn, fn) {
+            if (btn.dataset.lock === "1") return;
+            btn.dataset.lock = "1";
+            btn.disabled = true;
+            const originalText = btn.textContent;
+            btn.textContent = "🔄 执行中...";
+            try { 
+                return await fn(); 
+            }
+            finally { 
+                btn.disabled = false; 
+                btn.dataset.lock = "0";
+                btn.textContent = originalText;
+            }
+        }
+        function handler(e) {
+            const checkbox = e.target;
+            if (checkbox.tagName !== "INPUT" || checkbox.type !== "checkbox") return;
+
+            const key = checkbox.dataset.key;
+            const currentTab = location.hash.includes("videos")
+                ? "videos"
+                : (document.querySelector('.tab.active').textContent.includes("视频") ? "videos" : "users");
+
+            const selectedSet = currentTab === "videos" ? selectedVideos : selectedUsers;
+
+            if (checkbox.checked) selectedSet.add(key);
+            else selectedSet.delete(key);
+
+            saveSelectionToStorage();
+            reapplySelection(currentTab);
+        }
+
+        // 设置项目选择监听
+        function setupItemSelection() {
+            // 视频选择
+            document
+            .querySelector('#videosList .virtual-list-inner')
+            .addEventListener('change', handler)
+
+            
+            // 用户选择
+            document
+            .querySelector('#usersList .virtual-list-inner')
+            .addEventListener('change', handler)
+
+        }
+        
+        // WebSocket连接
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function() {
+                updateConnectionStatus(true);
+                addLog('✅ 已连接到系统', 'success');
+                
+                if (reconnectInterval) {
+                    clearInterval(reconnectInterval);
+                    reconnectInterval = null;
+                }
+            };
+            
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                handleWebSocketMessage(data);
+            };
+            
+            ws.onclose = function() {
+                updateConnectionStatus(false);
+                addLog('❌ 连接已断开，尝试重连...', 'error');
+                
+                if (!reconnectInterval) {
+                    reconnectInterval = setInterval(connectWebSocket, 5000);
+                }
+            };
+            
+            ws.onerror = function(error) {
+                addLog('❌ WebSocket错误', 'error');
+            };
+        }
+        
+        function handleWebSocketMessage(data) {
+            switch(data.type) {
+                case 'connected':
+                    addLog(data.msg, 'success');
+                    break;
+                case 'operation':
+                    addLog(data.msg, 'info');
+                    break;
+                case 'error':
+                    addLog(data.msg, 'error');
+                    
+                    break;
+                case 'pong':
+                    break;
+                default:
+                    addLog(JSON.stringify(data), 'info');
+            }
+        }
+        
+        function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById('connectionStatus');
+            if (connected) {
+                statusElement.textContent = '🟢 已连接';
+                statusElement.className = 'connection-status connected';
+            } else {
+                statusElement.textContent = '🔴 未连接';
+                statusElement.className = 'connection-status disconnected';
+            }
+        }
+        
+        function addLog(message, type = 'info') {
+            const logContainer = document.getElementById('logContainer');
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type}`;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            logEntry.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
+            
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            if (logContainer.children.length > 1000) {
+                logContainer.removeChild(logContainer.firstChild);
+            }
+        }
+        
+        async function apiCall(endpoint, options = {}) {
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    ...options
+                });
+                
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                addLog(`❌ API调用失败: ${error}`, 'error');
+                return { status: 'error', message: '网络请求失败' };
+            }
+        }
+        
+        // 原有的API函数保持不变
+        async function startBrowser() {
+            addLog('🖥️ 正在启动浏览器...', 'info');
+            const result = await apiCall('/api/browser/start');
+            if (result.status === 'success') {
+                addLog('✅ ' + result.message, 'success');
+            } else {
+                addLog('❌ ' + result.message, 'error');
+            }
+        }
+        // 统一的阶段二启动函数
+        async function startStage2Unified(opts = { useSelected: false }) {
+            const userCommentKeywords = document.getElementById('userCommentKeywords').value;
+            const ipKeywords = document.getElementById('ipKeywords').value;
+            const duration = document.getElementById('stage2Duration').value || 10;
+
+            if (!userCommentKeywords.trim()) {
+                addLog('❌ 请输入用户评论关键词', 'error');
+                return;
+            }
+
+            let videoUrls = '';
+            if (opts.useSelected) {
+                // 选中集合里是 id，这里把 id 映射成真实 video_url
+                const idToUrl = new Map((window.__videosList || []).map(v => [String(v.id), v.video_url]));
+                const selIds = [...selectedVideos];
+                if (selIds.length === 0) {
+                    addLog('❌ 请选择至少一个视频', 'error');
+                    return;
+                }
+                const urls = selIds.map(id => idToUrl.get(String(id))).filter(Boolean);
+                const miss = selIds.length - urls.length;
+                if (urls.length === 0) {
+                    addLog('❌ 选中的视频没有可用链接', 'error');
+                    return;
+                }
+                if (miss > 0) addLog(`⚠️ ${miss} 个选中项缺少链接，已跳过`, 'warning');
+
+                videoUrls = urls.join(' ');
+                addLog(`🧲 用选中的 ${urls.length} 个视频采集用户`, 'info');
+            } else {
+                addLog(`🚀 开始阶段二：用户采集，关键词: ${userCommentKeywords}`, 'info');
+            }
+
+
+            // 🔧 改为使用 JSON Body 传递参数（后端用 Body(...) 接收）
+            const result = await apiCall('/api/stage2_collect_users/start', {
+                body: JSON.stringify({
+                    user_comment_keywords: userCommentKeywords,
+                    ip_keywords: ipKeywords,
+                    duration: Number(duration),
+                    video_urls: videoUrls
+                })
+            });
+
+            if (result.status === 'success') {
+                addLog('✅ ' + result.message, 'success');
+            } else {
+                addLog('❌ ' + result.message, 'error');
+            }
+        }
+
+
+        async function startRandomLike() {
+            const duration = document.getElementById('likeDuration').value;
+            const likeFrequency = Number(document.getElementById('likeFrequency').value || 60); // 0~100
+            addLog(`🚀 开始随机点赞任务，时长: ${duration} 分钟，点赞频率: ${likeFrequency}%`, 'info');
+            
+            const result = await apiCall(
+                `/api/random_like/start?duration=${duration}&like_frequency=${likeFrequency}`
+            );
+            if (result.status === 'success') {
+                likeRunning = true;
+                updateServiceStatus();
+                addLog('✅ ' + result.message, 'success');
+            } else {
+                addLog('❌ ' + result.message, 'error');
+            }
+        }
+        
+        async function stopRandomLike() {
+            addLog('🛑 停止随机点赞...', 'info');
+            const result = await apiCall('/api/random_like/stop');
+            if (result.status === 'success') {
+                likeRunning = false;
+                updateServiceStatus();
+                addLog('✅ ' + result.message, 'success');
+            }
+        }
+        
+        async function startStage1CollectVideos() {
+            const keywords = document.getElementById('contentKeywords').value;
+            const sortType = document.getElementById('sortType').value;
+            const videosPerKeyword = document.getElementById('videosPerKeyword').value;
+            const duration = document.getElementById('stage1Duration').value;
+            
+            if (!keywords.trim()) {
+                addLog('❌ 请输入内容关键词', 'error');
+                return;
+            }
+            
+            addLog(`🚀 开始阶段一：视频采集，关键词: ${keywords}`, 'info');
+            
+            const result = await apiCall('/api/stage1_collect_videos/start', {
+            body: JSON.stringify({
+                keywords,                                 // 字段名与后端一致
+                sort_type: sortType,
+                videos_per_keyword: Number(videosPerKeyword),
+                duration: Number(duration)
+            })
+            });
+            
+            if (result.status === 'success') {
+                stage1Running = true;
+                updateServiceStatus();
+                addLog('✅ ' + result.message, 'success');
+            } else {
+                addLog('❌ ' + result.message, 'error');
+            }
+        }
+        
+        async function stopStage1CollectVideos() {
+            addLog('🛑 停止阶段一视频采集...', 'info');
+            const result = await apiCall('/api/stage1_collect_videos/stop');
+            if (result.status === 'success') {
+                stage1Running = false;
+                updateServiceStatus();
+                addLog('✅ ' + result.message, 'success');
+            }
+        }
+        
+        async function startStage2CollectUsers() {
+            await startStage2Unified({ useSelected: true });
+        }
+        
+        async function stopStage2CollectUsers() {
+            addLog('🛑 停止阶段二用户采集...', 'info');
+            const result = await apiCall('/api/stage2_collect_users/stop');
+            if (result.status === 'success') {
+                stage2Running = false;
+                updateServiceStatus();
+                addLog('✅ ' + result.message, 'success');
+            }
+        }
+        
+        async function startSendMessages() {
+            
+            const selectedUsersArray = [...selectedUsers];
+            const idToUrl = new Map((window.__usersList || []).map(u => [String(u.id), u.user_url]));
+            const urls = selectedUsersArray.map(id => idToUrl.get(String(id))).filter(Boolean);
+            if (urls.length === 0) { addLog('❌ 选中的用户没有可用主页链接', 'error'); return; }
+            const messageTemplate = document.getElementById('messageTemplate').value;
+            const duration = document.getElementById('messageDuration').value;
+            const intervalMinutes = Number(document.getElementById('messageInterval').value || 4); 
+            const likeFrequency = Number((document.getElementById('likeFrequency')?.value) ?? 60);
+            if (selectedUsersArray.length === 0) {
+                addLog('❌ 请选择至少一个用户', 'error');
+                return;
+            }
+            addLog(`💌 对选中 ${selectedUsersArray.length} 位用户发送私信，（间隔 ${intervalMinutes} 分钟/人）`, 'info');
+            
+            const result = await apiCall('/api/send_messages/start', {
+                body: JSON.stringify({
+                    message_template: messageTemplate,
+                    duration: Number(duration),
+                    user_urls: urls.join(' '),
+                    interval_minutes: intervalMinutes,
+                    like_frequency: likeFrequency,
+                    rotate_accounts: (document.getElementById('rotateAccounts')?.checked ? 1 : 0),
+                    account_dirs: (document.getElementById('accountDirs')?.value || '')
+                })
+
+            });
+            
+            if (result.status === 'success') {
+                messageRunning = true;
+                updateServiceStatus();
+                addLog('✅ ' + result.message, 'success');
+            } else {
+                addLog('❌ ' + result.message, 'error');
+            }
+        }
+        
+        async function stopSendMessages() {
+            addLog('🛑 停止私信发送...', 'info');
+            const result = await apiCall('/api/send_messages/stop');
+            if (result.status === 'success') {
+                messageRunning = false;
+                updateServiceStatus();
+                addLog('✅ ' + result.message, 'success');
+            }
+        }
+        
+        async function stopAllServices() {
+            addLog('🛑 停止所有服务...', 'info');
+            const result = await apiCall('/api/stop_all');
+            if (result.status === 'success') {
+                likeRunning = false;
+                stage1Running = false;
+                stage2Running = false;
+                messageRunning = false;
+                updateServiceStatus();
+                addLog('✅ ' + result.message, 'success');
+            }
+        }
+        
+        async function startStage2WithSelectedVideos() {
+            await startStage2Unified({ useSelected: true });
+        }
+        
+        async function startSendMessagesToSelectedUsers() {
+
+            return startSendMessages();
+        }
+        
+        function updateServiceStatus() {
+            updateStatusElement('like', likeRunning);
+            updateStatusElement('stage1', stage1Running);
+            updateStatusElement('stage2', stage2Running);
+            updateStatusElement('message', messageRunning);
+        }
+        
+        function updateStatusElement(service, isRunning) {
+            const indicator = document.getElementById(`${service}StatusIndicator`);
+            if (isRunning) {
+                indicator.className = 'status-indicator status-running';
+            } else {
+                indicator.className = 'status-indicator status-stopped';
+            }
+        }
+        
+        async function refreshStats() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    const stats = data.data.user_stats;
+                    const services = data.data.services;
+                    const browserStatus = data.data.browser;
+                    
+                    document.getElementById('totalUsers').textContent = stats.total_users || 0;
+                    document.getElementById('pendingUsers').textContent = stats.pending_users || 0;
+                    document.getElementById('sentUsers').textContent = stats.sent_users || 0;
+                    document.getElementById('todayUsers').textContent = stats.today_users || 0;
+                    
+                    document.getElementById('browserStatus').textContent = 
+                        browserStatus === '运行中' ? '🟢' : '🔴';
+                    browserRunning = browserStatus === '运行中';
+                    
+                    likeRunning = services.RandomLikeService?.running || false;
+                    const cas = services.CustomerAcquisitionService || {};
+                    stage1Running = !!(cas.running && cas.current_stage === 'stage1');  // ★ 新写法
+                    stage2Running = !!(cas.running && cas.current_stage === 'stage2');  // ★ 新写法
+                    messageRunning = services.PrivateMessageService?.running || false;
+                    
+                    updateServiceStatus();
+                }
+            } catch (error) {
+                console.error('刷新统计失败:', error);
+            }
+        }
+        
+        async function refreshVideos() {
+            try {
+                const sortBy = document.getElementById('videoSort')?.value || 'time';
+                const response = await fetch(`/api/videos?limit=0&dedup=1&sort_by=${sortBy}`);
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    const videosList = document.getElementById('videosList');
+                    
+                        if (data.data.length === 0) {
+                            // 不要破坏虚拟列表内层；仅清空数据并绘制空态
+                            window.__videosList = [];
+                            videosListVirtual.update();
+                            if (!videosList.querySelector('.empty-state')) {
+                                const empty = document.createElement('div');
+                                empty.className = 'empty-state';
+                                empty.innerHTML = '<div class="icon">📹</div><h3>暂无视频数据</h3><p>请先运行阶段一视频采集功能</p>';
+                                videosList.appendChild(empty);
+                            }
+                            return;
+                        }
+
+                    
+                    //videosList.innerHTML = '';
+                    window.__videosList = data.data;
+                    const es = videosList.querySelector('.empty-state'); if (es) es.remove();
+                    reconcileSelection('videos');
+                    videosListVirtual.update();
+
+
+                    updateVideosSelectionInfo();
+                }
+            } catch (error) {
+                console.error('刷新视频列表失败:', error);
+            }
+        }
+        
+        async function refreshUsers() {
+            try {
+                const sortBy = document.getElementById('userSort')?.value || 'time';
+                const response = await fetch(`/api/users?limit=0&dedup=1&sort_by=${sortBy}`);
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    const usersList = document.getElementById('usersList');
+                    
+                    if (data.data.length === 0) {
+                        window.__usersList = [];
+                        usersListVirtual.update();
+                        if (!usersList.querySelector('.empty-state')) {
+                            const empty = document.createElement('div');
+                            empty.className = 'empty-state';
+                            empty.innerHTML = '<div class="icon">👥</div><h3>暂无用户数据</h3><p>请先运行阶段二用户采集功能</p>';
+                            usersList.appendChild(empty);
+                        }
+                        return;
+                    }
+                    
+                    //usersList.innerHTML = '';
+                    window.__usersList = data.data;
+                    const esu = usersList.querySelector('.empty-state'); if (esu) esu.remove();
+                    reconcileSelection('users');
+                    usersListVirtual.update();
+
+
+                    updateUsersSelectionInfo();
+                }
+            } catch (error) {
+                console.error('刷新用户列表失败:', error);
+            }
+        }
+        
+        setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'ping' }));
+            }
+        }, 30000);
+        function createVirtualList(containerId, rowHeight, getData, renderRow) {
+            const container = document.getElementById(containerId);
+            container.classList.add("virtual-list");
+
+            const inner = document.createElement("div");
+            inner.className = "virtual-list-inner";
+            container.appendChild(inner);
+
+            function update() {
+                const list = getData(); // 原本就有的数据
+                const total = list.length;
+
+                inner.style.height = total * rowHeight + "px";
+
+                const scrollTop = container.scrollTop;
+                const viewHeight = container.clientHeight;
+
+                const startIndex = Math.floor(scrollTop / rowHeight);
+                const endIndex = Math.min(total - 1, Math.floor((scrollTop + viewHeight) / rowHeight));
+
+                inner.innerHTML = ""; // 清空，可见区重新绘制
+
+                for (let i = startIndex; i <= endIndex; i++) {
+                    const row = document.createElement("div");
+                    row.className = "virtual-row";
+                    row.style.top = (i * rowHeight) + "px";
+                    row.innerHTML = renderRow(list[i], i);
+
+                    inner.appendChild(row);
+                }
+            }
+
+            container.addEventListener("scroll", update);
+
+            return { update };
+        }
+        const usersListVirtual = createVirtualList(
+            "usersList", 
+            150, // 行高度，按你的布局精确设置
+            () => window.__usersList || [],
+            (item, index) => generateUserHTML(item)
+        );
+
+        const videosListVirtual = createVirtualList(
+            "videosList", 
+            140,
+            () => window.__videosList || [],
+            (item, index) => generateVideoHTML(item)
+        );
+        function escapeHTML(s) {
+        return String(s ?? '')
+            .replace(/&/g,'&amp;')
+            .replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;')
+            .replace(/"/g,'&quot;')
+            .replace(/'/g,'&#39;');
+        }
+
+        function generateVideoHTML(video) {
+            // 统一 key（使用视频链接做唯一键，和你现有 selectedVideos 逻辑一致）
+            const key = String(video.id);
+
+            // 兼容发布时间/采集时间的不同命名（publish_time / publish_ts、collected_time / collected_ts）
+            const publishText =
+                video.publish_time
+                || (video.publish_ts ? new Date(Number(video.publish_ts) * 1000).toLocaleString() : '未知');
+
+            const collectedText =
+                video.collected_time
+                || (video.collected_ts ? new Date(Number(video.collected_ts) * 1000).toLocaleString() : '未知');
+
+            // 兼容作者名称/主页的不同命名
+            const authorName = (
+                video.author_name ??
+                video.author ??
+                video.nickname ??
+                '未知作者'
+            );
+
+            const authorUrl = (
+                video.author_url ??
+                video.author_homepage ??
+                ''
+            );
+
+            // 兼容点赞字段：like_count / digg_count / likes / like
+            const likeCount = Number(
+                video.like_count ??
+                video.digg_count ??
+                video.likes ??
+                video.like ??
+                0
+            );
+
+            const authorHtml = authorUrl
+                ? `<a href="${authorUrl}" target="_blank" style="color:#1890ff;text-decoration:none;">${authorName}</a>`
+                : authorName;
+
+            const isChecked = selectedVideos.has(key);
+            const selectedClass = isChecked ? ' selected' : '';
+            const sentTs = Number(video.last_commented_ts || 0);
+            const statusClass = sentTs > 0 ? 'status-sent' : 'status-pending';
+            const statusText = sentTs > 0 ? '已发送' : '未发送';
+
+            return `
+                <div class="video-item${selectedClass}">
+                    <div class="checkbox-container">
+                        <input type="checkbox" class="video-select" data-key="${key}" ${isChecked ? 'checked' : ''}>
+                    </div>
+                    <div class="item-content">
+                        <div class="video-header">
+                            <div class="video-title">${video.video_desc || '未知描述'}</div><div class="status-badge ${statusClass}">${statusText}</div>
+
+                        </div>
+                        <div class="video-meta">
+                            <span>🕒 ${publishText || '未知'}</span>
+                            <span>🤖 ${collectedText || '未知'}</span>
+                            <span>🔑 ${video.keyword || ''}</span>
+                        </div>
+                        <div class="video-meta">
+                            <span>作者：${authorHtml}</span>
+                            <span style="margin-left: 15px;">👍点赞：${likeCount}</span>
+                        </div>
+                        <div class="video-desc">
+                            <a href="${video.video_url}" target="_blank" style="color:#1890ff;text-decoration:none;">🔗 查看视频</a>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        function generateUserHTML(user) {
+            const isSelected = selectedUsers.has(String(user.id));
+            const checked = isSelected ? "checked" : "";
+
+            const statusClass = user.message_status === "sent" ? "status-sent" : "status-pending";
+            const statusText  = user.message_status === "sent" ? "已发送" : "待发送";
+
+            const profileLink = user.user_url
+                ? `<a href="${user.user_url}" target="_blank" rel="noopener" style="color:#1890ff;text-decoration:none;font-size:0.8em;">🔗 个人主页</a>`
+                : "🔗 无主页链接";
+
+            return `
+                <div class="user-item ${isSelected ? "selected" : ""}">
+                    <div class="checkbox-container">
+                        <input type="checkbox" data-key="${user.id}" ${checked}>
+                    </div>
+                    <div class="item-content">
+                        <div class="user-header">
+                            <div class="user-name">${escapeHTML(user.username || "未知用户")}</div>
+                            <div class="status-badge ${statusClass}">${statusText}</div>
+                        </div>
+
+                        <div class="user-meta">
+                            <span>🎈 ${user.ip_location || "未知"}</span>
+                            <span>🕒 ${user.comment_time || "未知"}</span>
+                            <span>🤖 ${user.collected_time || "未知"}</span>
+                            <span>🔑 ${user.matched_keyword || "未知"}</span>
+                        </div>
+
+                        <div style="margin: 6px 0;">
+                            ${profileLink}
+                        </div>
+
+                        <div class="user-comment">${escapeHTML(user.comment_text || "无评论内容")}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function openXhsHome() {
+            addLog('🌐 打开小红书首页...', 'info');
+            const result = await apiCall('/api/xhs/open_home');
+            if (result.status === 'success') {
+                addLog(result.message || '✅ 已打开小红书首页', 'success');
+            } else {
+                addLog(result.message || '❌ 打开失败', 'error');
+            }
+        }
+
+        async function startXhsCollect() {
+            const keywords = (document.getElementById('xhsKeywords').value || '').trim();
+            const sortType = document.getElementById('xhsSortType').value;
+            const perKw = parseInt(document.getElementById('xhsPerKeyword').value || '5', 10);
+            const duration = parseInt(document.getElementById('xhsDuration').value || '10', 10);
+
+            if (!keywords) {
+                addLog('❌ 请输入关键词', 'error');
+                return;
+            }
+
+            addLog(`🚀 小红书采集：关键词=${keywords}，模式=${sortType}，每词=${perKw}`, 'info');
+            const result = await apiCall('/api/xhs/collect/start', {
+                body: JSON.stringify({
+                    keywords,
+                    sort_type: sortType,
+                    videos_per_keyword: perKw,
+                    duration: duration
+                })
+            });
+
+            if (result.status === 'success') {
+                addLog(result.message || '✅ 小红书采集服务已启动', 'success');
+            } else {
+                addLog(result.message || '❌ 启动失败', 'error');
+            }
+        }
+
+        async function stopXhsCollect() {
+            addLog('🛑 停止小红书采集...', 'info');
+            const result = await apiCall('/api/xhs/collect/stop');
+            if (result.status === 'success') {
+                addLog(result.message || '✅ 已停止', 'success');
+            } else {
+                addLog(result.message || '❌ 停止失败', 'error');
+            }
+        }
+        async function startXhsCommentOnSelectedVideos() {
+            const ids = [...selectedVideos];
+            if (ids.length === 0) {
+                addLog('❌ 请先勾选至少一个视频/笔记', 'error');
+                return;
+            }
+            // id->url 映射
+            const idToUrl = new Map((window.__videosList || []).map(v => [String(v.id), v.video_url]));
+            const urls = ids.map(id => idToUrl.get(String(id))).filter(Boolean);
+            if (urls.length === 0) {
+                addLog('❌ 选中的视频没有可用链接', 'error');
+                return;
+            }
+            const text = (document.getElementById('xhsCmtText').value || '').trim();
+            const templates = text.split('\n').map(s => s.trim()).filter(Boolean);
+            const per_note = Number(document.getElementById('xhsCmtPerNote').value || 1);
+            const interval_min_ms = Number(document.getElementById('xhsCmtIntervalMin').value || 1200);
+            const interval_max_ms = Number(document.getElementById('xhsCmtIntervalMax').value || 2500);
+            const skip_if_commented = !!document.getElementById('xhsCmtSkipDup').checked;
+
+            const payload = {
+                urls,
+                text: templates.length === 1 ? templates[0] : "",
+                templates: templates.length > 1 ? templates : [],
+                per_note,
+                interval_min_ms,
+                interval_max_ms,
+                skip_if_commented,
+                variant: !!document.getElementById('xhsCmtVariant').checked
+            };
+
+            addLog(`📕 小红书评论：${urls.length} 条链接，开始执行…`, 'info');
+            const result = await apiCall('/api/xhs/comment/start', { body: JSON.stringify(payload) });
+            if (result.status === 'success') {
+                addLog('✅ ' + result.message, 'success');
+            } else {
+                addLog('❌ ' + (result.message || '启动失败'), 'error');
+            }
+        }
+        // —— 小红书：监听勾选视频的新评论并自动回复 —— 
+        async function startXhsReplyWatch() {
+            // 1) 将“已勾选”的视频/笔记 id 映射为真实链接
+            const ids = [...selectedVideos];
+            if (ids.length === 0) { addLog('❌ 请先在“视频列表”勾选至少一个小红书链接', 'error'); return; }
+
+            const idToUrl = new Map((window.__videosList || []).map(v => [String(v.id), v.video_url]));
+            const urls = ids.map(id => idToUrl.get(String(id))).filter(Boolean);
+            if (urls.length === 0) { addLog('❌ 选中的视频没有可用链接', 'error'); return; }
+
+            // 2) 收集表单项
+            const kwRaw   = (document.getElementById('xhsWatchKeywords').value || '').trim();
+            const ipRaw   = (document.getElementById('xhsWatchIp').value || '').trim();
+            const txtRaw  = (document.getElementById('xhsWatchText').value || '').trim();
+            const afterExpr = (document.getElementById('xhsWatchAfterExpr').value || '').trim();
+
+            const dedupH  = Number(document.getElementById('xhsWatchDedupHours').value || 72);
+            const intMin  = Number(document.getElementById('xhsWatchIntervalMin').value || 1200);
+            const intMax  = Number(document.getElementById('xhsWatchIntervalMax').value || 2500);
+
+            const templates = txtRaw.split('\n').map(s => s.trim()).filter(Boolean);
+
+            const payload = {
+                urls,
+                keywords: kwRaw,              // 空串=任意
+                ip_keywords: ipRaw,           // 空串=任意
+                text: templates.length === 1 ? templates[0] : "",
+                templates: templates.length > 1 ? templates : [],
+                dedup_hours: dedupH,          // 同一用户去重时长（小时）
+                interval_min_ms: intMin,
+                after_expr: afterExpr,          // 新增：仅回复此时间后的评论
+                interval_max_ms: intMax,
+                variant: !!document.getElementById('xhsWatchVariant').checked
+            };
+
+            addLog(`👂 开始监听评论：${urls.length} 条链接；关键词=[${kwRaw || '任意'}]；IP=[${ipRaw || '任意'}]`, 'info');
+
+            const result = await apiCall('/api/xhs/reply_watch/start', {
+                body: JSON.stringify(payload)
+            });
+
+            if (result.status === 'success') {
+                addLog('✅ ' + (result.message || '监听已启动'), 'success');
+            } else {
+                addLog('❌ ' + (result.message || '启动失败'), 'error');
+            }
+        }
+
+        async function stopXhsReplyWatch() {
+            const result = await apiCall('/api/xhs/reply_watch/stop');
+            if (result.status === 'success') addLog('✅ ' + (result.message || '监听已停止'), 'success');
+            else addLog('❌ ' + (result.message || '停止失败'), 'error');
+        }
+
+        async function stopXhsComment() {
+            const result = await apiCall('/api/xhs/comment/stop');
+            if (result.status === 'success') addLog('✅ ' + result.message, 'success');
+            else addLog('❌ ' + (result.message || '停止失败'), 'error');
+        }
+
+    </script>
+</body>
+</html>
