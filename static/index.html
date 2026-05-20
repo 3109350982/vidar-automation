@@ -1037,6 +1037,45 @@
                     </button>
                 </div>
             </div>
+            <!-- 小红书双路线 AI Agent -->
+            <div class="function-section">
+                <h3>🤖 小红书双路线 AI Agent</h3>
+
+                <div class="control-group compact-control">
+                    <label>固定路线:</label>
+                    <select id="agentRoute">
+                        <option value="personal_account">个人账号运营</option>
+                        <option value="customer_acquisition">获客</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label>一句话描述你是做什么的:</label>
+                    <textarea id="agentUserInput" placeholder="例如：我是做宠物寄养的，主要服务广州本地养猫养狗人群"></textarea>
+                </div>
+
+                <div class="control-group compact-control">
+                    <label>当前 session_id:</label>
+                    <input type="number" id="agentSessionId" value="0" min="0">
+                </div>
+
+                <div class="control-group compact-control">
+                    <label>当前 project_id:</label>
+                    <input type="number" id="agentProjectId" value="0" min="0" readonly>
+                </div>
+
+                <div id="agentQuestionsBox" style="display:none;margin-top:10px;padding:10px;border-radius:6px;background:#fff7e6;border:1px solid #ffd591;"></div>
+
+                <div class="button-group">
+                    <button class="btn btn-success" id="agentStartBtn">🚀 创建 Agent 会话</button>
+                    <button class="btn btn-primary" id="agentAnswerBtn">💬 提交反问答案</button>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn btn-warning" id="agentRunBtn">📊 读取采集数据并生成报告</button>
+                    <button class="btn btn-secondary" id="agentLoadReportBtn">📄 查看报告</button>
+                </div>
+            </div>
             <!-- 小红书：打开首页 + 采集 -->
             <div class="function-section">
                 <h3>📕 采集视频/笔记</h3>
@@ -1172,6 +1211,7 @@
                 <div class="tab active" onclick="switchTab('logs',this)">📝 系统日志</div>
                 <div class="tab" onclick="switchTab('videos',this)">📹 视频列表</div>
                 <div  class="tab" onclick="switchTab('users',this)">👥 用户列表（已回复的用户）</div>
+                <div class="tab" onclick="switchTab('agentReport',this)">🤖 Agent 报告</div>
             </div>
             
             <div class="data-container">
@@ -1258,6 +1298,24 @@
                         </div>
                     </div>
                 </div>
+                <!-- Agent 报告 -->
+                <div id="agentReportTab" class="tab-content">
+                    <div class="data-toolbar">
+                        <div class="toolbar-left">
+                            <button class="btn btn-secondary" id="agentRefreshSessionBtn">刷新 Agent 会话</button>
+                            <button class="btn btn-secondary" id="agentRefreshReportBtn">刷新 Agent 报告</button>
+                        </div>
+                    </div>
+                    <div class="data-content">
+                        <div id="agentReportContent" style="padding:20px;line-height:1.7;">
+                            <div class="empty-state">
+                                <div class="icon">🤖</div>
+                                <h3>暂无 Agent 报告</h3>
+                                <p>请先创建 Agent 会话，再读取采集数据生成报告</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1282,6 +1340,8 @@
         let messageRunning = false;
         let browserRunning = false;
         let __appStarted = false;
+        let currentAgentSessionId = 0;
+        let currentAgentProjectId = 0;
         // 初始化
 
         function showLic(){ const m=document.getElementById('licenseModal'); if(m) m.style.display='flex'; }
@@ -1402,6 +1462,9 @@
                 'startStage1Btn','stopStage1Btn','startStage2Btn','stopStage2Btn',
                 'startMessageBtn','stopMessageBtn','stage2WithSelectedBtn','sendToSelectedBtn',
                 'xhsCmtStartBtn','xhsCmtStopBtn',
+                'xhsCmtStartBtn','xhsCmtStopBtn',
+                'agentStartBtn','agentAnswerBtn','agentRunBtn','agentLoadReportBtn',
+                'agentRefreshSessionBtn','agentRefreshReportBtn',
                 'clearDataBtn','refreshVideosBtn','refreshUsersBtn','selectAllVideosBtn',
                 'clearVideosSelectionBtn','selectAllUsersBtn','clearUsersSelectionBtn'
             ];
@@ -1562,7 +1625,23 @@
 
             const xhsWatchStopBtn = document.getElementById('xhsWatchStopBtn');
             if (xhsWatchStopBtn) xhsWatchStopBtn.onclick = (e) => withBtnLock(e.currentTarget, stopXhsReplyWatch);
+            const agentStartBtn = document.getElementById('agentStartBtn');
+            if (agentStartBtn) agentStartBtn.onclick = (e) => withBtnLock(e.currentTarget, startAgentSession);
 
+            const agentAnswerBtn = document.getElementById('agentAnswerBtn');
+            if (agentAnswerBtn) agentAnswerBtn.onclick = (e) => withBtnLock(e.currentTarget, answerAgentQuestions);
+
+            const agentRunBtn = document.getElementById('agentRunBtn');
+            if (agentRunBtn) agentRunBtn.onclick = (e) => withBtnLock(e.currentTarget, runAgentSession);
+
+            const agentLoadReportBtn = document.getElementById('agentLoadReportBtn');
+            if (agentLoadReportBtn) agentLoadReportBtn.onclick = (e) => withBtnLock(e.currentTarget, loadAgentReport);
+
+            const agentRefreshSessionBtn = document.getElementById('agentRefreshSessionBtn');
+            if (agentRefreshSessionBtn) agentRefreshSessionBtn.onclick = (e) => withBtnLock(e.currentTarget, loadAgentSession);
+
+            const agentRefreshReportBtn = document.getElementById('agentRefreshReportBtn');
+            if (agentRefreshReportBtn) agentRefreshReportBtn.onclick = (e) => withBtnLock(e.currentTarget, loadAgentReport);
             const stopAllServicesBtn = document.getElementById('stopAllServicesBtn');
             if (stopAllServicesBtn) stopAllServicesBtn.onclick = (e) => withBtnLock(e.currentTarget, stopAllServices);
             
@@ -2931,7 +3010,337 @@
                 </div>
             `;
         }
+        function getCurrentAgentSessionId() {
+            const inputValue = Number(document.getElementById('agentSessionId')?.value || 0);
+            return inputValue || currentAgentSessionId || 0;
+        }
 
+        function setCurrentAgentIds(sessionId, projectId) {
+            currentAgentSessionId = Number(sessionId || 0);
+            currentAgentProjectId = Number(projectId || 0);
+
+            const sessionInput = document.getElementById('agentSessionId');
+            const projectInput = document.getElementById('agentProjectId');
+
+            if (sessionInput) sessionInput.value = String(currentAgentSessionId || 0);
+            if (projectInput) projectInput.value = String(currentAgentProjectId || 0);
+        }
+
+        function switchAgentReportTab() {
+            const tab = [...document.querySelectorAll('.tabs .tab')]
+                .find(item => item.textContent.includes('Agent 报告'));
+
+            if (tab) {
+                switchTab('agentReport', tab);
+            }
+        }
+
+        function renderAgentQuestions(questions) {
+            const box = document.getElementById('agentQuestionsBox');
+            if (!box) return;
+
+            const list = Array.isArray(questions) ? questions : [];
+
+            if (list.length === 0) {
+                box.style.display = 'none';
+                box.innerHTML = '';
+                return;
+            }
+
+            box.style.display = 'block';
+            box.innerHTML = `
+                <div style="font-weight:600;margin-bottom:8px;">Agent 需要你补充以下信息：</div>
+                ${list.map((item, index) => `
+                    <div class="control-group compact-control">
+                        <label>${index + 1}. ${escapeHTML(item.question || '')}</label>
+                        <input type="text" class="agent-answer-input" data-field="${escapeHTML(item.field_name || '')}" placeholder="${escapeHTML(item.reason || '')}">
+                    </div>
+                `).join('')}
+            `;
+        }
+
+        function renderAgentKeywords(keywords) {
+            const list = Array.isArray(keywords) ? keywords : [];
+            if (list.length === 0) return '<p>暂无关键词</p>';
+
+            return `
+                <div style="display:grid;gap:8px;">
+                    ${list.map(item => `
+                        <div style="padding:10px;border:1px solid #e8e8e8;border-radius:6px;background:#fafafa;">
+                            <div style="font-weight:600;color:#1890ff;">${escapeHTML(item.keyword || '')}</div>
+                            <div style="font-size:12px;color:#666;">类型：${escapeHTML(item.keyword_type || '')}｜分数：${escapeHTML(item.score || 0)}</div>
+                            <div style="font-size:12px;color:#555;margin-top:4px;">原因：${escapeHTML(item.reason || '')}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderAgentSession(data) {
+            const content = document.getElementById('agentReportContent');
+            if (!content) return;
+
+            const parsedProfile = data.parsed_profile || {};
+            const profile = parsedProfile.profile || {};
+            const keywords = data.keywords || [];
+
+            content.innerHTML = `
+                <h2 style="margin-bottom:12px;">🤖 Agent 会话状态</h2>
+                <div style="padding:12px;border:1px solid #e8e8e8;border-radius:8px;background:#fafafa;margin-bottom:14px;">
+                    <div><b>session_id：</b>${escapeHTML(data.id || data.session_id || '')}</div>
+                    <div><b>project_id：</b>${escapeHTML(data.project_id || '')}</div>
+                    <div><b>路线：</b>${escapeHTML(data.route || '')}</div>
+                    <div><b>状态：</b>${escapeHTML(data.status || '')}</div>
+                    <div><b>进度：</b>${escapeHTML(data.progress || 0)}%</div>
+                    <div><b>错误：</b>${escapeHTML(data.error_message || '')}</div>
+                </div>
+
+                <h3 style="margin-bottom:8px;">项目画像</h3>
+                <div style="padding:12px;border:1px solid #e8e8e8;border-radius:8px;background:#ffffff;margin-bottom:14px;">
+                    <div><b>行业：</b>${escapeHTML(profile.industry || '')}</div>
+                    <div><b>服务：</b>${escapeHTML(profile.service || '')}</div>
+                    <div><b>城市：</b>${escapeHTML(profile.city || '')}</div>
+                    <div><b>目标客户：</b>${escapeHTML(profile.target_customer || '')}</div>
+                    <div><b>账号风格：</b>${escapeHTML(profile.account_style || '')}</div>
+                    <div><b>客户类型：</b>${escapeHTML(profile.customer_type || '')}</div>
+                </div>
+
+                <h3 style="margin-bottom:8px;">关键词</h3>
+                ${renderAgentKeywords(keywords)}
+            `;
+
+            switchAgentReportTab();
+        }
+
+        function renderAgentReport(data) {
+            const content = document.getElementById('agentReportContent');
+            if (!content) return;
+
+            const reportJson = data.report_json_data || parseAgentJson(data.report_json) || {};
+            const markdown = data.report_markdown || '';
+
+            content.innerHTML = `
+                <h2 style="margin-bottom:12px;">📄 Agent 报告</h2>
+                <div style="padding:12px;border:1px solid #e8e8e8;border-radius:8px;background:#fafafa;margin-bottom:14px;">
+                    <div><b>report_id：</b>${escapeHTML(data.id || '')}</div>
+                    <div><b>session_id：</b>${escapeHTML(data.session_id || '')}</div>
+                    <div><b>project_id：</b>${escapeHTML(data.project_id || '')}</div>
+                    <div><b>路线：</b>${escapeHTML(data.route || '')}</div>
+                    <div><b>生成时间：</b>${escapeHTML(data.created_time || '')}</div>
+                </div>
+
+                <h3 style="margin-bottom:8px;">Markdown 报告</h3>
+                <pre style="white-space:pre-wrap;background:#1f1f1f;color:#e0e0e0;padding:14px;border-radius:8px;line-height:1.6;max-height:520px;overflow:auto;">${escapeHTML(markdown || '暂无 Markdown 报告')}</pre>
+
+                <h3 style="margin:16px 0 8px;">结构化 JSON</h3>
+                <pre style="white-space:pre-wrap;background:#f8f9fa;color:#333;padding:14px;border-radius:8px;line-height:1.6;max-height:420px;overflow:auto;">${escapeHTML(JSON.stringify(reportJson, null, 2))}</pre>
+            `;
+
+            switchAgentReportTab();
+        }
+
+        function parseAgentJson(text) {
+            if (!text) return {};
+            if (typeof text === 'object') return text;
+
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                return {};
+            }
+        }
+
+        async function startAgentSession() {
+            const route = document.getElementById('agentRoute').value;
+            const userInput = (document.getElementById('agentUserInput').value || '').trim();
+
+            if (!userInput) {
+                addLog('❌ 请先输入一句业务描述', 'error');
+                return;
+            }
+
+            addLog('🤖 正在创建 Agent 会话...', 'info');
+
+            const result = await apiCall('/api/agent/start', {
+                body: JSON.stringify({
+                    route: route,
+                    user_input: userInput
+                })
+            });
+
+            if (result.status !== 'success') {
+                addLog('❌ ' + (result.message || 'Agent 会话创建失败'), 'error');
+                return;
+            }
+
+            setCurrentAgentIds(result.session_id, result.project_id);
+            renderAgentQuestions(result.questions || []);
+
+            addLog(`✅ Agent 会话创建成功：session_id=${result.session_id}`, 'success');
+
+            renderAgentSession({
+                id: result.session_id,
+                project_id: result.project_id,
+                route: route,
+                status: result.session_status,
+                progress: result.keywords && result.keywords.length ? 30 : 10,
+                error_message: '',
+                parsed_profile: {
+                    profile: result.profile || {}
+                },
+                keywords: result.keywords || []
+            });
+        }
+
+        async function answerAgentQuestions() {
+            const sessionId = getCurrentAgentSessionId();
+            if (!sessionId) {
+                addLog('❌ 缺少 Agent session_id', 'error');
+                return;
+            }
+
+            const answers = {};
+            document.querySelectorAll('.agent-answer-input').forEach(input => {
+                const fieldName = input.dataset.field;
+                const value = (input.value || '').trim();
+                if (fieldName && value) {
+                    answers[fieldName] = value;
+                }
+            });
+
+            if (Object.keys(answers).length === 0) {
+                addLog('❌ 请填写至少一个反问答案', 'error');
+                return;
+            }
+
+            addLog(`💬 正在提交 Agent 反问答案：session_id=${sessionId}`, 'info');
+
+            const result = await apiCall('/api/agent/answer', {
+                body: JSON.stringify({
+                    session_id: Number(sessionId),
+                    answers: answers
+                })
+            });
+
+            if (result.status !== 'success') {
+                addLog('❌ ' + (result.message || '提交反问答案失败'), 'error');
+                return;
+            }
+
+            setCurrentAgentIds(result.session_id, result.project_id);
+            renderAgentQuestions(result.questions || []);
+
+            addLog(`✅ Agent 反问答案提交成功：状态=${result.session_status}`, 'success');
+
+            renderAgentSession({
+                id: result.session_id,
+                project_id: result.project_id,
+                route: result.profile?.route || document.getElementById('agentRoute').value,
+                status: result.session_status,
+                progress: result.keywords && result.keywords.length ? 30 : 20,
+                error_message: '',
+                parsed_profile: {
+                    profile: result.profile || {}
+                },
+                keywords: result.keywords || []
+            });
+        }
+
+        async function runAgentSession() {
+            const sessionId = getCurrentAgentSessionId();
+            if (!sessionId) {
+                addLog('❌ 缺少 Agent session_id', 'error');
+                return;
+            }
+
+            addLog(`📊 正在读取已采集数据并生成 Agent 报告：session_id=${sessionId}`, 'info');
+
+            const result = await apiCall('/api/agent/run', {
+                body: JSON.stringify({
+                    session_id: Number(sessionId)
+                })
+            });
+
+            if (result.status === 'success') {
+                addLog(`✅ Agent 报告生成成功：report_id=${result.report_id}`, 'success');
+                renderAgentReport({
+                    id: result.report_id,
+                    session_id: result.session_id,
+                    project_id: result.project_id,
+                    route: result.route,
+                    report_json_data: result.report_json,
+                    report_markdown: result.report_markdown,
+                    created_time: ''
+                });
+                return;
+            }
+
+            if (result.status === 'need_data') {
+                addLog('⚠️ ' + (result.message || '需要先采集数据'), 'warning');
+                renderAgentSession({
+                    id: result.session_id,
+                    project_id: currentAgentProjectId,
+                    route: document.getElementById('agentRoute').value,
+                    status: 'ready',
+                    progress: 40,
+                    error_message: result.message || '',
+                    parsed_profile: {
+                        profile: {}
+                    },
+                    keywords: result.keywords || []
+                });
+                return;
+            }
+
+            addLog('❌ ' + (result.message || 'Agent 执行失败'), 'error');
+        }
+
+        async function loadAgentSession() {
+            const sessionId = getCurrentAgentSessionId();
+            if (!sessionId) {
+                addLog('❌ 缺少 Agent session_id', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/agent/session/${sessionId}`);
+                const result = await response.json();
+
+                if (result.status !== 'success') {
+                    addLog('❌ ' + (result.message || '读取 Agent 会话失败'), 'error');
+                    return;
+                }
+
+                setCurrentAgentIds(result.data.id, result.data.project_id);
+                renderAgentSession(result.data);
+                addLog(`✅ 已读取 Agent 会话：session_id=${sessionId}`, 'success');
+            } catch (e) {
+                addLog('❌ 读取 Agent 会话异常：' + e, 'error');
+            }
+        }
+
+        async function loadAgentReport() {
+            const sessionId = getCurrentAgentSessionId();
+            if (!sessionId) {
+                addLog('❌ 缺少 Agent session_id', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/agent/report/${sessionId}`);
+                const result = await response.json();
+
+                if (result.status !== 'success') {
+                    addLog('❌ ' + (result.message || '读取 Agent 报告失败'), 'error');
+                    return;
+                }
+
+                renderAgentReport(result.data);
+                addLog(`✅ 已读取 Agent 报告：session_id=${sessionId}`, 'success');
+            } catch (e) {
+                addLog('❌ 读取 Agent 报告异常：' + e, 'error');
+            }
+        }
         async function openXhsHome() {
             addLog('🌐 打开小红书首页...', 'info');
             const result = await apiCall('/api/xhs/open_home');
@@ -2947,6 +3356,8 @@
             const sortType = document.getElementById('xhsSortType').value;
             const perKw = parseInt(document.getElementById('xhsPerKeyword').value || '5', 10);
             const duration = parseInt(document.getElementById('xhsDuration').value || '10', 10);
+            const agentSessionId = getCurrentAgentSessionId();
+            const agentProjectId = Number(document.getElementById('agentProjectId')?.value || currentAgentProjectId || 0);
 
             if (!keywords) {
                 addLog('❌ 请输入关键词', 'error');
@@ -2954,12 +3365,18 @@
             }
 
             addLog(`🚀 小红书采集：关键词=${keywords}，模式=${sortType}，每词=${perKw}`, 'info');
+            if (agentSessionId > 0) {
+                addLog(`🤖 本次采集将绑定 Agent session_id=${agentSessionId}，并进入笔记详情页采集正文`, 'info');
+            }
+
             const result = await apiCall('/api/xhs/collect/start', {
                 body: JSON.stringify({
                     keywords,
                     sort_type: sortType,
                     videos_per_keyword: perKw,
-                    duration: duration
+                    duration: duration,
+                    agent_session_id: Number(agentSessionId || 0),
+                    project_id: Number(agentProjectId || 0)
                 })
             });
 

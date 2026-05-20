@@ -7,6 +7,7 @@
 import asyncio
 from urllib.parse import quote
 import re
+import time
 from services.base_service import BaseService
 from core.browser_manager import browser_manager
 from utils.data_storage import data_storage
@@ -31,11 +32,24 @@ class XhsAcquisitionService(BaseService):
     ):
         self.current_stage = "stage1"
 
+        agent_session_id = int(kwargs.get("agent_session_id") or 0)
+        project_id = int(kwargs.get("project_id") or 0)
+        collection_batch_id = str(kwargs.get("collection_batch_id") or "").strip()
+        enable_note_content = bool(kwargs.get("enable_note_content") or False)
+
+        if agent_session_id > 0 and not collection_batch_id:
+            collection_batch_id = f"agent_{agent_session_id}_{int(time.time())}"
+
         if not await self._ensure_browser_ready():
             await self._emit_event("error", "❌ 浏览器未就绪，无法开始小红书采集")
             return
 
         await self._emit_event("operation", f"🚀 小红书采集开始（模式：{sort_type}）")
+        if agent_session_id > 0:
+            await self._emit_event(
+                "operation",
+                f"🤖 Agent 采集绑定：session_id={agent_session_id}, batch={collection_batch_id}"
+            )
 
         # 抖音阶段一用的是“每个关键词采集上限 + 滚动停止判断 + 无新增条数计数”的那套节奏
         # 这里严格复刻：逐关键词 → 搜索页 → while 滚动采集 → 详情字段在列表卡片上尽可能拿
@@ -100,9 +114,27 @@ class XhsAcquisitionService(BaseService):
                             new_videos.append(video)
                             # 与抖音一致：发现即落库
                             try:
+                                if agent_session_id > 0:
+                                    video["agent_session_id"] = agent_session_id
+                                    video["project_id"] = project_id
+                                    video["collection_batch_id"] = collection_batch_id
+                                    video["agent_collection"] = 1
+
                                 success = data_storage.save_video(video)
                                 if success:
                                     await self._emit_event("debug", f"✅ 保存笔记: {video['video_desc'][:50]}...")
+                                    if enable_note_content and agent_session_id > 0:
+                                        detail_data = await self._collect_note_detail_content(
+                                            browser_manager=browser_manager,
+                                            video=video,
+                                            agent_session_id=agent_session_id,
+                                            project_id=project_id,
+                                            collection_batch_id=collection_batch_id
+                                        )
+                                        if detail_data:
+                                            saved_content = data_storage.save_xhs_note_content(detail_data)
+                                            if saved_content:
+                                                await self._emit_event("debug", f"📝 已保存笔记正文: {video['video_desc'][:30]}...")
                                 else:
                                     await self._emit_event("warn",  f"⚠️ 保存失败: {video.get('video_url','')}")
                             except Exception as e:
@@ -371,6 +403,136 @@ class XhsAcquisitionService(BaseService):
             await self._emit_event("error", f"❌ 采集当前区域异常: {e}")
 
         return videos
+
+
+    async def _collect_note_detail_content(
+        self,
+        browser_manager,
+        video,
+        agent_session_id: int,
+        project_id: int,
+        collection_batch_id: str
+    ):
+        """进入笔记详情页采集正文，仅在 Agent 采集时启用"""
+        detail_page = None
+        try:
+            video_url = video.get("video_url") or ""
+            if not video_url:
+                return {}
+
+            context = browser_manager.page.context
+            detail_page = await context.new_page()
+            await detail_page.goto(video_url, wait_until="domcontentloaded", timeout=60000)
+
+            try:
+                await detail_page.wait_for_selector(
+                    'div.note-content, div#detail-desc, span.note-text, .note-text',
+                    timeout=15000
+                )
+            except Exception:
+                pass
+
+            detail = await detail_page.evaluate(
+                """
+                () => {
+                    const pickText = (selectors) => {
+                        for (const sel of selectors) {
+                            const el = document.querySelector(sel);
+                            if (el) {
+                                const text = (el.innerText || el.textContent || '').trim();
+                                if (text) return text;
+                            }
+                        }
+                        return '';
+                    };
+
+                    const title = pickText([
+                        'div.detail-title.title',
+                        '.detail-title.title',
+                        '.detail-title',
+                        '[class*="detail-title"]',
+                        'title'
+                    ]);
+
+                    const contentText = pickText([
+                        'div#detail-desc span.note-text',
+                        '#detail-desc .note-text',
+                        'span.note-text',
+                        '.note-text',
+                        'div.desc',
+                        '[class*="note-text"]'
+                    ]);
+
+                    const rawText = pickText([
+                        'div.note-content',
+                        '.note-content',
+                        'div#detail-desc',
+                        '#detail-desc',
+                        '.interaction-container'
+                    ]);
+
+                    const authorName = pickText([
+                        '.author-container .name',
+                        '.author .name',
+                        '.username',
+                        '[class*="author"] [class*="name"]'
+                    ]);
+
+                    const tags = Array.from(document.querySelectorAll(
+                        'a.tag, .tag, a[href*="search_result"], a[href*="keyword"]'
+                    ))
+                        .map(el => (el.innerText || el.textContent || '').trim())
+                        .filter(Boolean)
+                        .map(text => text.replace(/^#/, '').trim())
+                        .filter(Boolean);
+
+                    const imageCount = Array.from(document.querySelectorAll(
+                        '.swiper-slide img, .media-container img, .note-slider img, img'
+                    )).filter(img => {
+                        const src = img.getAttribute('src') || '';
+                        return src && !src.includes('avatar') && !src.includes('icon');
+                    }).length;
+
+                    return {
+                        title,
+                        content_text: contentText,
+                        raw_text: rawText,
+                        author_name: authorName,
+                        tags,
+                        image_count: imageCount
+                    };
+                }
+                """
+            )
+
+            content_text = (detail.get("content_text") or "").strip()
+            raw_text = (detail.get("raw_text") or "").strip()
+
+            if not content_text and not raw_text:
+                return {}
+
+            return {
+                "video_url": video_url,
+                "agent_session_id": agent_session_id,
+                "project_id": project_id,
+                "collection_batch_id": collection_batch_id,
+                "title": detail.get("title") or video.get("video_desc") or "",
+                "content_text": content_text,
+                "raw_text": raw_text,
+                "tags": detail.get("tags") or [],
+                "image_count": int(detail.get("image_count") or 0),
+                "source": "detail_page"
+            }
+
+        except Exception as e:
+            await self._emit_event("debug", f"⚠️ 笔记正文采集失败: {e}")
+            return {}
+        finally:
+            if detail_page:
+                try:
+                    await detail_page.close()
+                except Exception:
+                    pass
 
 
     # —— 与抖音一致的等待与辅助 —— #

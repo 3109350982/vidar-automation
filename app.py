@@ -30,6 +30,11 @@ from main import get_system
 from utils.strings import split_list  # 新增导入
 from utils.license_client import clear_cache as lic_clear_cache
 import logging
+from utils.license_client import clear_cache as lic_clear_cache
+from models.ai_schemas import AgentStartRequest, AgentAnswerRequest, AgentRunRequest
+from services.ai_agent_service import get_ai_agent_service
+
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("douyin_web")
 # 创建FastAPI应用
@@ -411,6 +416,8 @@ async def start_xhs_collect(
     sort_type: str = Body(default="综合"),            # 综合 / 笔记 / 视频
     videos_per_keyword: int = Body(default=5),
     duration: int = Body(default=10),
+    agent_session_id: int = Body(default=0),
+    project_id: int = Body(default=0),
 ):
     if not lic_status().get("valid"):
         return {"status":"error","message":"❌ 未授权或已过期，请先在页面输入许可证密钥"}
@@ -424,6 +431,21 @@ async def start_xhs_collect(
         if not await _ensure_browser_for_service():
             return {"status": "error", "message": "❌ 浏览器未就绪"}
 
+        agent_session_id = int(agent_session_id or 0)
+        project_id = int(project_id or 0)
+        collection_batch_id = ""
+        enable_note_content = False
+
+        if agent_session_id > 0:
+            service = get_ai_agent_service()
+            session = service.get_session(agent_session_id)
+            if not session:
+                return {"status": "error", "message": "Agent 会话不存在，无法绑定本次采集"}
+
+            project_id = project_id or int(session.get("project_id") or 0)
+            collection_batch_id = f"agent_{agent_session_id}_{int(time.time())}"
+            enable_note_content = True
+
         system = await get_system()
         success = await system.start_service(
             "XhsAcquisitionService",
@@ -432,11 +454,17 @@ async def start_xhs_collect(
             videos_per_keyword=int(videos_per_keyword),
             duration_minutes=int(duration),
             mode="stage1",
+            agent_session_id=agent_session_id,
+            project_id=project_id,
+            collection_batch_id=collection_batch_id,
+            enable_note_content=enable_note_content,
         )
         if success:
             await manager.broadcast({"type": "operation", "msg": f"🚀 小红书采集已启动"})
             await manager.broadcast({"type": "operation", "msg": f"🔍 关键词: {', '.join(keyword_list)}"})
             await manager.broadcast({"type": "operation", "msg": f"📦 每词采集: {videos_per_keyword} 条，模式: {sort_type}"})
+            if agent_session_id > 0:
+                await manager.broadcast({"type": "operation", "msg": f"🤖 已绑定 Agent session_id={agent_session_id}，将进入详情页采集正文"})
             return {"status": "success", "message": "小红书采集服务已启动"}
         else:
             return {"status": "error", "message": "小红书采集服务启动失败"}
@@ -826,6 +854,181 @@ async def clear_task_logs(request: Request):
         return {"status": "success", "message": f"✅ 已清除 {cnt} 条任务日志"}
     except Exception as e:
         return {"status": "error", "message": f"❌ 清除任务日志失败: {e}"}
+# ---------------- Agent API 接口 ----------------
+
+def _agent_route_value(route):
+    """兼容 Enum 和字符串路线"""
+    return route.value if hasattr(route, "value") else str(route or "")
+
+
+def _load_agent_notes_for_run(session_id: int, limit: int = 80):
+    """读取当前 Agent 会话绑定的小红书笔记，供个人账号运营路线分析"""
+    rows = data_storage.get_agent_notes_for_analysis(session_id=session_id, limit=limit)
+    notes = []
+
+    for row in rows:
+        video_url = str(row.get("video_url") or "")
+        if video_url and "xiaohongshu.com" not in video_url:
+            continue
+
+        notes.append({
+            "note_url": video_url,
+            "video_url": video_url,
+            "title": row.get("video_desc") or "",
+            "video_desc": row.get("video_desc") or "",
+            "author_name": row.get("author_name") or "",
+            "author_url": row.get("author_url") or "",
+            "like_count": int(row.get("like_count") or 0),
+            "comment_count": int(row.get("comment_count") or 0),
+            "collect_count": int(row.get("collect_count") or 0),
+            "keyword": row.get("keyword") or "",
+            "publish_time": row.get("publish_time") or "",
+            "publish_ts": int(row.get("publish_ts") or 0),
+            "collected_time": row.get("collected_time") or "",
+            "content_text": row.get("content_text") or "",
+            "raw_text": row.get("raw_text") or "",
+            "tags_json": row.get("tags_json") or "",
+            "image_count": int(row.get("image_count") or 0),
+            "agent_session_id": int(row.get("agent_session_id") or 0),
+            "project_id": int(row.get("project_id") or 0),
+            "collection_batch_id": row.get("collection_batch_id") or "",
+        })
+
+    return notes
+
+
+def _load_agent_comments_for_run(limit: int = 200):
+    """读取小红书评论用户数据，供 Agent 获客路线分析"""
+    rows = data_storage.get_recent_users(limit=limit, sort_by="time")
+    comments = []
+
+    for row in rows:
+        video_url = str(row.get("video_url") or "")
+        user_url = str(row.get("user_url") or "")
+
+        if video_url and "xiaohongshu.com" not in video_url and "xiaohongshu.com" not in user_url:
+            continue
+
+        comments.append({
+            "video_url": video_url,
+            "user_url": user_url,
+            "username": row.get("username") or "",
+            "comment_text": row.get("comment_text") or "",
+            "ip_location": row.get("ip_location") or "",
+            "video_desc": row.get("video_desc") or "",
+            "matched_keyword": row.get("matched_keyword") or "",
+            "comment_time": row.get("comment_time") or "",
+            "comment_ts": int(row.get("comment_ts") or 0),
+            "collected_time": row.get("collected_time") or "",
+        })
+
+    return comments
+
+
+@app.post("/api/agent/start")
+async def api_agent_start(request: AgentStartRequest):
+    """启动 Agent 会话：用户选择路线并输入一句业务描述"""
+    if not lic_status().get("valid"):
+        return {"status":"error","message":"❌ 未授权或已过期，请先在页面输入许可证密钥"}
+
+    try:
+        service = get_ai_agent_service()
+        result = await service.start_session(
+            route=_agent_route_value(request.route),
+            user_input=request.user_input
+        )
+        await manager.broadcast({"type": "operation", "msg": "🤖 Agent 会话已创建"})
+        return result
+    except Exception as e:
+        return {"status": "error", "message": f"❌ Agent 启动失败: {e}"}
+
+
+@app.post("/api/agent/answer")
+async def api_agent_answer(request: AgentAnswerRequest):
+    """提交 Agent 反问答案"""
+    if not lic_status().get("valid"):
+        return {"status":"error","message":"❌ 未授权或已过期，请先在页面输入许可证密钥"}
+
+    try:
+        service = get_ai_agent_service()
+        result = await service.answer_clarifying_questions(
+            session_id=request.session_id,
+            answers=request.answers
+        )
+        await manager.broadcast({"type": "operation", "msg": f"🤖 Agent 已接收反问答案，session_id={request.session_id}"})
+        return result
+    except Exception as e:
+        return {"status": "error", "message": f"❌ Agent 反问答案提交失败: {e}"}
+
+
+@app.post("/api/agent/run")
+async def api_agent_run(request: AgentRunRequest):
+    """执行 Agent 分析：读取已采集的小红书数据并生成报告"""
+    if not lic_status().get("valid"):
+        return {"status":"error","message":"❌ 未授权或已过期，请先在页面输入许可证密钥"}
+
+    try:
+        service = get_ai_agent_service()
+        session = service.get_session(request.session_id)
+
+        if not session:
+            return {"status": "error", "message": "Agent 会话不存在"}
+
+        route = session.get("route") or ""
+
+        if route == "customer_acquisition":
+            notes = _load_agent_notes_for_run(session_id=request.session_id, limit=80)
+            comments = _load_agent_comments_for_run(limit=200)
+        else:
+            notes = _load_agent_notes_for_run(session_id=request.session_id, limit=80)
+            comments = []
+
+        result = await service.run(
+            session_id=request.session_id,
+            notes=notes,
+            comments=comments
+        )
+
+        await manager.broadcast({"type": "operation", "msg": f"🤖 Agent 执行完成，session_id={request.session_id}"})
+        return result
+    except Exception as e:
+        return {"status": "error", "message": f"❌ Agent 执行失败: {e}"}
+
+
+@app.get("/api/agent/session/{session_id}")
+async def api_agent_session(session_id: int):
+    """读取 Agent 会话状态"""
+    if not lic_status().get("valid"):
+        return {"status":"error","message":"❌ 未授权或已过期，请先在页面输入许可证密钥"}
+
+    try:
+        service = get_ai_agent_service()
+        data = service.get_session(session_id)
+
+        if not data:
+            return {"status": "error", "message": "Agent 会话不存在"}
+
+        return {"status": "success", "data": data}
+    except Exception as e:
+        return {"status": "error", "message": f"❌ 读取 Agent 会话失败: {e}"}
+
+
+@app.get("/api/agent/report/{session_id}")
+async def api_agent_report(session_id: int):
+    """读取 Agent 报告"""
+    if not lic_status().get("valid"):
+        return {"status":"error","message":"❌ 未授权或已过期，请先在页面输入许可证密钥"}
+
+    try:
+        service = get_ai_agent_service()
+        data = service.get_report(session_id)
+
+        if not data:
+            return {"status": "error", "message": "Agent 报告不存在"}
+
+        return {"status": "success", "data": data}
+    except Exception as e:
+        return {"status": "error", "message": f"❌ 读取 Agent 报告失败: {e}"}
 # WebSocket路由
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

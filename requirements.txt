@@ -18,3 +18,6 @@ numpy
 ordered-set
 requests
 pydantic
+# AI模型调用
+openai>=2.0.0
+python-dotenv>=1.0.1
