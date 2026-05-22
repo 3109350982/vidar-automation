@@ -1029,6 +1029,223 @@ async def api_agent_report(session_id: int):
         return {"status": "success", "data": data}
     except Exception as e:
         return {"status": "error", "message": f"❌ 读取 Agent 报告失败: {e}"}
+
+
+@app.get("/api/agent/candidate_terms")
+async def api_agent_candidate_terms(
+    review_status: str = "pending",
+    project_id: int = 0,
+    limit: int = 100,
+):
+    """读取 Agent 候选库列表"""
+    if not lic_status().get("valid"):
+        return {"status":"error","message":"❌ 未授权或已过期，请先在页面输入许可证密钥"}
+
+    try:
+        review_status = str(review_status or "pending").strip()
+        if review_status not in {"pending", "approved", "rejected"}:
+            return {"status": "error", "message": "review_status 只能是 pending、approved、rejected"}
+
+        project_filter = int(project_id or 0)
+        data = data_storage.get_candidate_terms(
+            review_status=review_status,
+            project_id=project_filter if project_filter > 0 else None,
+            limit=int(limit or 100)
+        )
+
+        for item in data:
+            item["evidence_samples"] = _agent_json_loads(item.get("evidence_samples_json"))
+
+        return {"status": "success", "data": data}
+    except Exception as e:
+        return {"status": "error", "message": f"❌ 读取候选库失败: {e}"}
+
+
+@app.post("/api/agent/candidate_terms/approve")
+async def api_agent_candidate_term_approve(payload: dict = Body(default=None)):
+    """人工通过候选词，写入正式库"""
+    if not lic_status().get("valid"):
+        return {"status":"error","message":"❌ 未授权或已过期，请先在页面输入许可证密钥"}
+
+    try:
+        payload = payload or {}
+        candidate_id = int(payload.get("candidate_id") or 0)
+        mapping = payload.get("mapping")
+
+        if candidate_id <= 0:
+            return {"status": "error", "message": "缺少 candidate_id"}
+
+        candidate = _get_agent_candidate_term_by_id(candidate_id)
+        if not candidate:
+            return {"status": "error", "message": "候选项不存在"}
+
+        if candidate.get("review_status") != "pending":
+            return {"status": "error", "message": "只有 pending 状态的候选项可以通过"}
+
+        if int(candidate.get("evidence_count") or 0) < 2:
+            return {"status": "error", "message": "候选项证据数量少于 2，不能进入正式库"}
+
+        success = data_storage.approve_candidate_term(candidate_id, mapping=mapping)
+        if not success:
+            return {"status": "error", "message": "候选项通过失败"}
+
+        approved_terms = data_storage.get_approved_terms(
+            project_id=int(candidate.get("project_id") or 0) if int(candidate.get("project_id") or 0) > 0 else None,
+            limit=50
+        )
+        await manager.broadcast({"type": "operation", "msg": f"🧠 候选项已通过：{candidate.get('term') or ''}"})
+        return {"status": "success", "message": "候选项已通过并写入正式库", "data": approved_terms}
+    except Exception as e:
+        return {"status": "error", "message": f"❌ 通过候选项失败: {e}"}
+
+
+@app.post("/api/agent/candidate_terms/reject")
+async def api_agent_candidate_term_reject(payload: dict = Body(default=None)):
+    """人工拒绝候选词"""
+    if not lic_status().get("valid"):
+        return {"status":"error","message":"❌ 未授权或已过期，请先在页面输入许可证密钥"}
+
+    try:
+        payload = payload or {}
+        candidate_id = int(payload.get("candidate_id") or 0)
+
+        if candidate_id <= 0:
+            return {"status": "error", "message": "缺少 candidate_id"}
+
+        candidate = _get_agent_candidate_term_by_id(candidate_id)
+        if not candidate:
+            return {"status": "error", "message": "候选项不存在"}
+
+        if candidate.get("review_status") != "pending":
+            return {"status": "error", "message": "只有 pending 状态的候选项可以拒绝"}
+
+        success = data_storage.reject_candidate_term(candidate_id)
+        if not success:
+            return {"status": "error", "message": "候选项拒绝失败"}
+
+        await manager.broadcast({"type": "operation", "msg": f"🧠 候选项已拒绝：{candidate.get('term') or ''}"})
+        return {"status": "success", "message": "候选项已拒绝"}
+    except Exception as e:
+        return {"status": "error", "message": f"❌ 拒绝候选项失败: {e}"}
+
+
+@app.get("/api/agent/approved_terms")
+async def api_agent_approved_terms(project_id: int = 0, limit: int = 200):
+    """读取人工审核通过后的正式库"""
+    if not lic_status().get("valid"):
+        return {"status":"error","message":"❌ 未授权或已过期，请先在页面输入许可证密钥"}
+
+    try:
+        project_filter = int(project_id or 0)
+        data = data_storage.get_approved_terms(
+            project_id=project_filter if project_filter > 0 else None,
+            limit=int(limit or 200)
+        )
+
+        for item in data:
+            item["mapping"] = _agent_json_loads(item.get("mapping_json"))
+
+        return {"status": "success", "data": data}
+    except Exception as e:
+        return {"status": "error", "message": f"❌ 读取正式库失败: {e}"}
+
+
+@app.get("/api/agent/project_memory")
+async def api_agent_project_memory(project_id: int, limit: int = 100):
+    """读取项目记忆"""
+    if not lic_status().get("valid"):
+        return {"status":"error","message":"❌ 未授权或已过期，请先在页面输入许可证密钥"}
+
+    try:
+        project_id = int(project_id or 0)
+        if project_id <= 0:
+            return {"status": "error", "message": "缺少 project_id"}
+
+        data = data_storage.get_project_memory(project_id=project_id, limit=int(limit or 100))
+        return {"status": "success", "data": data}
+    except Exception as e:
+        return {"status": "error", "message": f"❌ 读取项目记忆失败: {e}"}
+
+
+@app.post("/api/agent/project_memory")
+async def api_agent_project_memory_save(payload: dict = Body(default=None)):
+    """保存项目记忆"""
+    if not lic_status().get("valid"):
+        return {"status":"error","message":"❌ 未授权或已过期，请先在页面输入许可证密钥"}
+
+    try:
+        payload = payload or {}
+        project_id = int(payload.get("project_id") or 0)
+        memory_type = str(payload.get("memory_type") or "").strip()
+        content = str(payload.get("content") or "").strip()
+        source_session_id = payload.get("source_session_id")
+
+        allowed_memory_types = {
+            "preferred_title_style",
+            "rejected_content_direction",
+            "account_style",
+            "accepted_selling_point",
+            "manual_note",
+        }
+
+        if project_id <= 0:
+            return {"status": "error", "message": "缺少 project_id"}
+
+        if memory_type not in allowed_memory_types:
+            return {"status": "error", "message": "memory_type 不合法"}
+
+        if not content:
+            return {"status": "error", "message": "项目记忆内容不能为空"}
+
+        if source_session_id is not None and str(source_session_id).strip():
+            source_session_id = int(source_session_id)
+        else:
+            source_session_id = None
+
+        memory_id = data_storage.save_project_memory(
+            project_id=project_id,
+            memory_type=memory_type,
+            content=content,
+            source_session_id=source_session_id
+        )
+
+        if memory_id <= 0:
+            return {"status": "error", "message": "项目记忆保存失败"}
+
+        data = data_storage.get_project_memory(project_id=project_id, limit=100)
+        await manager.broadcast({"type": "operation", "msg": f"🧠 项目记忆已保存：{memory_type}"})
+        return {"status": "success", "message": "项目记忆已保存", "memory_id": memory_id, "data": data}
+    except Exception as e:
+        return {"status": "error", "message": f"❌ 保存项目记忆失败: {e}"}
+
+
+def _get_agent_candidate_term_by_id(candidate_id: int) -> Dict[str, Any]:
+    """按 ID 读取候选项"""
+    try:
+        conn = data_storage.get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM candidate_terms WHERE id = ? LIMIT 1", (int(candidate_id),))
+        row = cur.fetchone()
+        conn.close()
+        return dict(row) if row else {}
+    except Exception as e:
+        print(f"读取候选项失败: {e}")
+        return {}
+
+
+def _agent_json_loads(text):
+    """安全解析 Agent JSON 字段"""
+    if isinstance(text, (dict, list)):
+        return text
+
+    if not text:
+        return []
+
+    try:
+        return json.loads(text)
+    except Exception:
+        return []
+
 # WebSocket路由
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

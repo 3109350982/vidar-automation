@@ -372,6 +372,32 @@ class DataStorage:
                 created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+
+        # 小红书笔记公开评论原始表（仅供 Agent 获客路线分析，不在前端列表展示）
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS xhs_note_comments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                agent_session_id INTEGER DEFAULT 0,
+                project_id INTEGER DEFAULT 0,
+                collection_batch_id TEXT,
+                note_url TEXT NOT NULL,
+                note_title TEXT,
+                comment_id TEXT,
+                username TEXT,
+                user_url TEXT,
+                comment_text TEXT,
+                ip_location TEXT,
+                comment_time TEXT,
+                comment_ts INTEGER DEFAULT 0,
+                like_count INTEGER DEFAULT 0,
+                reply_count INTEGER DEFAULT 0,
+                matched_keyword TEXT,
+                intent_level TEXT DEFAULT 'unknown',
+                is_high_value INTEGER DEFAULT 0,
+                raw_text TEXT,
+                created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         		# —— 新增的列，向后兼容（若不存在则添加）——
         self._ensure_column("videos", "publish_time", "TEXT")
         self._ensure_column("videos", "publish_ts", "INTEGER DEFAULT 0")
@@ -449,6 +475,9 @@ class DataStorage:
         cur.execute("CREATE INDEX IF NOT EXISTS idx_videos_collection_batch ON videos(collection_batch_id)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_xhs_note_contents_session ON xhs_note_contents(agent_session_id)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_xhs_note_contents_video_url ON xhs_note_contents(video_url)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_xhs_note_comments_session ON xhs_note_comments(agent_session_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_xhs_note_comments_note_url ON xhs_note_comments(note_url)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_xhs_note_comments_high_value ON xhs_note_comments(is_high_value)")
         conn.commit()
         conn.close()
     def _json_dumps(self, data: Any) -> str:
@@ -1229,6 +1258,155 @@ class DataStorage:
         except Exception as e:
             print(f"读取 Agent 笔记分析数据失败: {e}")
             return []
+
+    def save_xhs_note_comments(self, comments: List[Dict[str, Any]]) -> int:
+        """保存小红书笔记公开评论原始数据（仅供 Agent 获客路线分析）"""
+        try:
+            if not comments:
+                return 0
+
+            conn = self.get_connection()
+            cur = conn.cursor()
+            count = 0
+
+            for item in comments:
+                note_url = item.get("note_url") or item.get("video_url") or ""
+                comment_text = item.get("comment_text") or ""
+                if not note_url or not comment_text:
+                    continue
+
+                comment_time = item.get("comment_time") or ""
+                comment_ts = item.get("comment_ts") or self._parse_time_ago_to_epoch(comment_time)
+                comment_id = item.get("comment_id") or self._build_xhs_comment_id(
+                    note_url=note_url,
+                    username=item.get("username") or "",
+                    comment_text=comment_text,
+                    comment_time=comment_time,
+                )
+
+                cur.execute("""
+                    SELECT 1
+                    FROM xhs_note_comments
+                    WHERE agent_session_id = ?
+                      AND note_url = ?
+                      AND comment_id = ?
+                    LIMIT 1
+                """, (
+                    int(item.get("agent_session_id") or 0),
+                    note_url,
+                    comment_id,
+                ))
+                if cur.fetchone():
+                    continue
+
+                is_high_value = self._is_high_value_xhs_comment(
+                    comment_text=comment_text,
+                    matched_keyword=item.get("matched_keyword") or ""
+                )
+                intent_level = item.get("intent_level") or ("medium" if is_high_value else "low")
+
+                cur.execute("""
+                    INSERT INTO xhs_note_comments
+                    (agent_session_id, project_id, collection_batch_id, note_url, note_title, comment_id,
+                     username, user_url, comment_text, ip_location, comment_time, comment_ts, like_count,
+                     reply_count, matched_keyword, intent_level, is_high_value, raw_text)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    int(item.get("agent_session_id") or 0),
+                    int(item.get("project_id") or 0),
+                    item.get("collection_batch_id") or "",
+                    note_url,
+                    item.get("note_title") or item.get("video_desc") or "",
+                    comment_id,
+                    item.get("username") or "",
+                    item.get("user_url") or "",
+                    comment_text,
+                    item.get("ip_location") or "",
+                    comment_time,
+                    int(comment_ts or 0),
+                    int(item.get("like_count") or 0),
+                    int(item.get("reply_count") or 0),
+                    item.get("matched_keyword") or "",
+                    intent_level,
+                    1 if is_high_value else 0,
+                    item.get("raw_text") or "",
+                ))
+                count += 1
+
+            conn.commit()
+            conn.close()
+            return count
+        except Exception as e:
+            print(f"保存小红书笔记评论失败: {e}")
+            return 0
+
+    def get_agent_note_comments_for_analysis(self, session_id: int, limit: int = 120, high_value_only: bool = True) -> List[Dict]:
+        """读取当前 Agent 会话绑定的小红书公开评论，供获客路线 AI 分析"""
+        try:
+            conn = self.get_connection()
+            cur = conn.cursor()
+
+            if high_value_only:
+                cur.execute("""
+                    SELECT *
+                    FROM xhs_note_comments
+                    WHERE agent_session_id = ?
+                      AND is_high_value = 1
+                    ORDER BY comment_ts DESC, created_time DESC, id DESC
+                    LIMIT ?
+                """, (int(session_id), int(limit)))
+            else:
+                cur.execute("""
+                    SELECT *
+                    FROM xhs_note_comments
+                    WHERE agent_session_id = ?
+                    ORDER BY is_high_value DESC, comment_ts DESC, created_time DESC, id DESC
+                    LIMIT ?
+                """, (int(session_id), int(limit)))
+
+            rows = cur.fetchall()
+            conn.close()
+            return [dict(r) for r in rows]
+        except Exception as e:
+            print(f"读取 Agent 笔记评论失败: {e}")
+            return []
+
+    def _build_xhs_comment_id(self, note_url: str, username: str, comment_text: str, comment_time: str) -> str:
+        """生成评论去重 ID"""
+        raw = f"{note_url}|{username}|{comment_text}|{comment_time}"
+        return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+    def _is_high_value_xhs_comment(self, comment_text: str, matched_keyword: str = "") -> bool:
+        """本地判断公开评论是否具备获客分析价值"""
+        text = str(comment_text or "").strip()
+        if not text:
+            return False
+
+        low_value_texts = {
+            "哈哈哈", "哈哈", "好看", "路过", "赞", "收藏了", "学到了", "蹲", "马克",
+            "打卡", "来了", "不错", "真好", "哇", "666", "姐妹", "谢谢分享"
+        }
+        if text in low_value_texts:
+            return False
+
+        high_value_words = [
+            "多少钱", "价格", "价位", "报价", "费用", "预算", "贵吗", "便宜吗",
+            "求推荐", "推荐", "在哪", "地址", "位置", "能预约", "预约", "档期",
+            "避坑", "靠谱吗", "靠谱", "踩雷", "案例", "客片", "效果", "套餐",
+            "怎么选", "适合", "咨询", "联系方式", "私", "还有吗", "有位置吗"
+        ]
+        if any(word in text for word in high_value_words):
+            return True
+
+        matched_keyword = str(matched_keyword or "").strip()
+        if matched_keyword and matched_keyword in text:
+            return True
+
+        question_markers = ["?", "？", "吗", "么", "怎么", "哪里", "哪家", "多少", "能不能", "有没有"]
+        if any(marker in text for marker in question_markers) and len(text) >= 4:
+            return True
+
+        return False
 
     def mark_message_sent(self, user_url: str) -> bool:
         """标记用户为已发送私信（同时写入 sent_users）"""

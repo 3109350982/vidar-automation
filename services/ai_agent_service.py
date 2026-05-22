@@ -191,8 +191,14 @@ class AIAgentService:
         if not profile:
             raise RuntimeError("Agent 会话缺少项目画像")
 
+        project_id = int(session.get("project_id") or 0)
+        profile_for_prompt = self._build_profile_with_review_context(
+            profile=profile,
+            project_id=project_id
+        )
+
         ai_result = await self.ai_provider.chat_json(
-            build_keyword_generation_messages(profile)
+            build_keyword_generation_messages(profile_for_prompt)
         )
 
         keyword_result = self._validate_model(KeywordGenerationResult, ai_result)
@@ -217,9 +223,14 @@ class AIAgentService:
             raise RuntimeError("Agent 会话不存在")
 
         profile = self._get_profile_from_session(session)
+        project_id = int(session.get("project_id") or 0)
+        profile_for_prompt = self._build_profile_with_review_context(
+            profile=profile,
+            project_id=project_id
+        )
 
         ai_result = await self.ai_provider.chat_json(
-            build_note_analysis_messages(profile, notes)
+            build_note_analysis_messages(profile_for_prompt, notes)
         )
 
         note_result = self._validate_model(NoteAnalysisResult, ai_result)
@@ -248,9 +259,14 @@ class AIAgentService:
             raise RuntimeError("Agent 会话不存在")
 
         profile = self._get_profile_from_session(session)
+        project_id = int(session.get("project_id") or 0)
+        profile_for_prompt = self._build_profile_with_review_context(
+            profile=profile,
+            project_id=project_id
+        )
 
         ai_result = await self.ai_provider.chat_json(
-            build_comment_insight_messages(profile, comments)
+            build_comment_insight_messages(profile_for_prompt, comments)
         )
 
         comment_result = self._validate_model(CommentInsightResult, ai_result)
@@ -278,9 +294,13 @@ class AIAgentService:
 
         profile = self._get_profile_from_session(session)
         project_id = int(session.get("project_id") or 0)
+        profile_for_prompt = self._build_profile_with_review_context(
+            profile=profile,
+            project_id=project_id
+        )
 
         ai_result = await self.ai_provider.chat_json(
-            build_candidate_term_messages(profile, notes, comments)
+            build_candidate_term_messages(profile_for_prompt, notes, comments)
         )
 
         candidate_result = self._validate_model(CandidateTermResult, ai_result)
@@ -317,11 +337,15 @@ class AIAgentService:
         profile = self._get_profile_from_session(session)
         project_id = int(session.get("project_id") or 0)
         keywords = self.storage.get_generated_keywords(session_id)
+        profile_for_prompt = self._build_profile_with_review_context(
+            profile=profile,
+            project_id=project_id
+        )
 
         ai_result = await self.ai_provider.chat_json(
             build_report_messages(
                 route=route_value,
-                profile=profile,
+                profile=profile_for_prompt,
                 keywords=keywords,
                 note_analyses=note_analyses or [],
                 comment_insights=comment_insights or [],
@@ -1160,6 +1184,81 @@ class AIAgentService:
             ))
 
         return questions
+
+    def _build_profile_with_review_context(self, profile: Dict[str, Any], project_id: int) -> Dict[str, Any]:
+        """把正式词库和项目记忆加入 AI 输入参考，不直接改变项目画像字段"""
+        result = dict(profile or {})
+        project_id = int(project_id or result.get("project_id") or 0)
+
+        result["approved_terms_reference"] = self._load_approved_terms_reference(project_id)
+        result["project_memory_reference"] = self._load_project_memory_reference(project_id)
+        result["agent_reference_rules"] = [
+            "正式库 approved_terms_reference 只能作为下一次 Agent 任务的参考，不能替代本次采集数据。",
+            "项目记忆 project_memory_reference 用于延续同一项目的用户偏好、拒绝方向、账号风格和已接受卖点。",
+            "rejected_content_direction 类型的项目记忆表示用户明确拒绝的内容方向，后续报告和选题需要避开。",
+            "最终结论必须优先引用本次真实采集的笔记、评论、互动数据或原始证据。",
+            "如果正式库、项目记忆和本次采集证据冲突，以本次真实采集证据和用户最新输入为准。"
+        ]
+
+        return result
+
+    def _load_approved_terms_reference(self, project_id: int) -> List[Dict[str, Any]]:
+        """读取人工审核通过的正式词库，供 AI 下一次任务参考"""
+        project_id = int(project_id or 0)
+        if project_id <= 0:
+            return []
+
+        try:
+            rows = self.storage.get_approved_terms(project_id=project_id, limit=80)
+        except Exception:
+            return []
+
+        result = []
+        for row in rows:
+            if not isinstance(row, dict):
+                row = dict(row)
+
+            mapping_data = self._json_loads(row.get("mapping_json") or "")
+
+            result.append({
+                "id": row.get("id"),
+                "candidate_id": row.get("candidate_id"),
+                "project_id": row.get("project_id"),
+                "industry": row.get("industry") or "",
+                "term": row.get("term") or "",
+                "term_type": row.get("term_type") or "",
+                "mapping": mapping_data,
+                "created_time": row.get("created_time") or ""
+            })
+
+        return result
+
+    def _load_project_memory_reference(self, project_id: int) -> List[Dict[str, Any]]:
+        """读取项目记忆，供 AI 下一次任务参考"""
+        project_id = int(project_id or 0)
+        if project_id <= 0:
+            return []
+
+        try:
+            rows = self.storage.get_project_memory(project_id=project_id, limit=100)
+        except Exception:
+            return []
+
+        result = []
+        for row in rows:
+            if not isinstance(row, dict):
+                row = dict(row)
+
+            result.append({
+                "id": row.get("id"),
+                "project_id": row.get("project_id"),
+                "memory_type": row.get("memory_type") or "",
+                "content": row.get("content") or "",
+                "source_session_id": row.get("source_session_id"),
+                "created_time": row.get("created_time") or ""
+            })
+
+        return result
 
     def _get_required_missing_fields(self, route: str, profile: Dict[str, Any]) -> List[str]:
         """根据路线检查必填字段"""

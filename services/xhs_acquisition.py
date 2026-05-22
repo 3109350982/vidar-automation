@@ -36,6 +36,12 @@ class XhsAcquisitionService(BaseService):
         project_id = int(kwargs.get("project_id") or 0)
         collection_batch_id = str(kwargs.get("collection_batch_id") or "").strip()
         enable_note_content = bool(kwargs.get("enable_note_content") or False)
+        agent_route = str(kwargs.get("agent_route") or "").strip()
+        enable_comment_collection = bool(kwargs.get("enable_comment_collection") or False)
+        max_comments_per_note = int(kwargs.get("max_comments_per_note") or 30)
+
+        if agent_route != "customer_acquisition" or agent_session_id <= 0:
+            enable_comment_collection = False
 
         if agent_session_id > 0 and not collection_batch_id:
             collection_batch_id = f"agent_{agent_session_id}_{int(time.time())}"
@@ -50,6 +56,11 @@ class XhsAcquisitionService(BaseService):
                 "operation",
                 f"🤖 Agent 采集绑定：session_id={agent_session_id}, batch={collection_batch_id}"
             )
+            if enable_comment_collection:
+                await self._emit_event(
+                    "operation",
+                    f"💬 获客路线已启用公开评论采集：每篇最多 {max_comments_per_note} 条"
+                )
 
         # 抖音阶段一用的是“每个关键词采集上限 + 滚动停止判断 + 无新增条数计数”的那套节奏
         # 这里严格复刻：逐关键词 → 搜索页 → while 滚动采集 → 详情字段在列表卡片上尽可能拿
@@ -129,12 +140,23 @@ class XhsAcquisitionService(BaseService):
                                             video=video,
                                             agent_session_id=agent_session_id,
                                             project_id=project_id,
-                                            collection_batch_id=collection_batch_id
+                                            collection_batch_id=collection_batch_id,
+                                            enable_comment_collection=enable_comment_collection,
+                                            max_comments_per_note=max_comments_per_note,
+                                            matched_keyword=kw
                                         )
                                         if detail_data:
                                             saved_content = data_storage.save_xhs_note_content(detail_data)
                                             if saved_content:
                                                 await self._emit_event("debug", f"📝 已保存笔记正文: {video['video_desc'][:30]}...")
+
+                                            comments = detail_data.get("comments") or []
+                                            if comments:
+                                                saved_comments = data_storage.save_xhs_note_comments(comments)
+                                                await self._emit_event(
+                                                    "debug",
+                                                    f"💬 已保存公开评论: {saved_comments}/{len(comments)} 条"
+                                                )
                                 else:
                                     await self._emit_event("warn",  f"⚠️ 保存失败: {video.get('video_url','')}")
                             except Exception as e:
@@ -411,7 +433,10 @@ class XhsAcquisitionService(BaseService):
         video,
         agent_session_id: int,
         project_id: int,
-        collection_batch_id: str
+        collection_batch_id: str,
+        enable_comment_collection: bool = False,
+        max_comments_per_note: int = 30,
+        matched_keyword: str = ""
     ):
         """进入笔记详情页采集正文，仅在 Agent 采集时启用"""
         detail_page = None
@@ -432,18 +457,55 @@ class XhsAcquisitionService(BaseService):
             except Exception:
                 pass
 
+            if enable_comment_collection:
+                try:
+                    await detail_page.wait_for_selector(
+                        '.comment-item, [class*="comment-item"], [class*="commentItem"], [class*="parent-comment"], [class*="comments"]',
+                        timeout=8000
+                    )
+                except Exception:
+                    pass
+                try:
+                    await detail_page.evaluate("""() => window.scrollBy(0, Math.floor(window.innerHeight * 0.35))""")
+                    await asyncio.sleep(0.6)
+                except Exception:
+                    pass
+
             detail = await detail_page.evaluate(
                 """
-                () => {
-                    const pickText = (selectors) => {
+                (args) => {
+                    const enableComments = !!args.enable_comment_collection;
+                    const commentLimit = Number(args.max_comments_per_note || 30);
+
+                    const pickText = (selectors, root=document) => {
                         for (const sel of selectors) {
-                            const el = document.querySelector(sel);
+                            const el = root.querySelector(sel);
                             if (el) {
                                 const text = (el.innerText || el.textContent || '').trim();
                                 if (text) return text;
                             }
                         }
                         return '';
+                    };
+
+                    const pickHref = (selectors, root=document) => {
+                        for (const sel of selectors) {
+                            const el = root.querySelector(sel);
+                            if (el) {
+                                const href = el.getAttribute('href') || '';
+                                if (href) return href.startsWith('http') ? href : (location.origin + href);
+                            }
+                        }
+                        return '';
+                    };
+
+                    const toInt = (text) => {
+                        if (!text) return 0;
+                        let t = String(text).replace(/,/g, '').toLowerCase().trim();
+                        if (t.endsWith('亿')) return Math.floor(parseFloat(t) * 100000000);
+                        if (t.endsWith('万') || t.endsWith('w')) return Math.floor(parseFloat(t) * 10000);
+                        const m = t.match(/[0-9]+(?:\\.[0-9]+)?/);
+                        return m ? Math.floor(parseFloat(m[0])) : 0;
                     };
 
                     const title = pickText([
@@ -493,22 +555,129 @@ class XhsAcquisitionService(BaseService):
                         return src && !src.includes('avatar') && !src.includes('icon');
                     }).length;
 
+                    let comments = [];
+                    if (enableComments) {
+                        const commentNodes = Array.from(document.querySelectorAll(
+                            '.comment-item, [class*="comment-item"], [class*="commentItem"], [class*="parent-comment"], [class*="comment-item-container"]'
+                        ));
+
+                        const seen = new Set();
+                        for (const node of commentNodes) {
+                            if (comments.length >= commentLimit) break;
+
+                            const raw = (node.innerText || node.textContent || '').trim();
+                            if (!raw || raw.length < 2) continue;
+
+                            let commentText = pickText([
+                                '.content',
+                                '.comment-content',
+                                '[class*="comment-content"]',
+                                '[class*="content"] span',
+                                '[class*="content"]'
+                            ], node);
+
+                            if (!commentText) {
+                                const lines = raw.split(/\\r?\\n/).map(x => x.trim()).filter(Boolean);
+                                commentText = lines.length > 1 ? lines[1] : lines[0];
+                            }
+
+                            commentText = String(commentText || '').trim();
+                            if (!commentText || commentText.length < 2) continue;
+                            if (commentText.length > 500) commentText = commentText.slice(0, 500);
+
+                            const username = pickText([
+                                '.author .name',
+                                '.user-name',
+                                '.username',
+                                '.name',
+                                '[class*="author"] [class*="name"]',
+                                '[class*="user"] [class*="name"]'
+                            ], node);
+
+                            const userUrl = pickHref([
+                                'a[href*="/user/profile"]',
+                                'a[href*="user/profile"]'
+                            ], node);
+
+                            const commentTime = pickText([
+                                '.date',
+                                '.time',
+                                '[class*="date"]',
+                                '[class*="time"]'
+                            ], node);
+
+                            const ipLocation = pickText([
+                                '.location',
+                                '[class*="location"]',
+                                '[class*="ip"]'
+                            ], node);
+
+                            const likeText = pickText([
+                                '.like .count',
+                                '[class*="like"] [class*="count"]',
+                                '[class*="like"]'
+                            ], node);
+
+                            const key = `${userUrl}|${username}|${commentText}|${commentTime}`;
+                            if (seen.has(key)) continue;
+                            seen.add(key);
+
+                            comments.push({
+                                username,
+                                user_url: userUrl,
+                                comment_text: commentText,
+                                comment_time: commentTime,
+                                ip_location: ipLocation,
+                                like_count: toInt(likeText),
+                                reply_count: 0,
+                                raw_text: raw.slice(0, 1000)
+                            });
+                        }
+                    }
+
                     return {
                         title,
                         content_text: contentText,
                         raw_text: rawText,
                         author_name: authorName,
                         tags,
-                        image_count: imageCount
+                        image_count: imageCount,
+                        comments
                     };
                 }
-                """
+                """,
+                {
+                    "enable_comment_collection": enable_comment_collection,
+                    "max_comments_per_note": max_comments_per_note
+                }
             )
 
             content_text = (detail.get("content_text") or "").strip()
             raw_text = (detail.get("raw_text") or "").strip()
 
-            if not content_text and not raw_text:
+            comments = []
+            for item in detail.get("comments") or []:
+                comment_text = (item.get("comment_text") or "").strip()
+                if not comment_text:
+                    continue
+                comments.append({
+                    "agent_session_id": agent_session_id,
+                    "project_id": project_id,
+                    "collection_batch_id": collection_batch_id,
+                    "note_url": video_url,
+                    "note_title": detail.get("title") or video.get("video_desc") or "",
+                    "username": item.get("username") or "",
+                    "user_url": item.get("user_url") or "",
+                    "comment_text": comment_text,
+                    "ip_location": item.get("ip_location") or "",
+                    "comment_time": item.get("comment_time") or "",
+                    "like_count": int(item.get("like_count") or 0),
+                    "reply_count": int(item.get("reply_count") or 0),
+                    "matched_keyword": matched_keyword or video.get("keyword") or "",
+                    "raw_text": item.get("raw_text") or "",
+                })
+
+            if not content_text and not raw_text and not comments:
                 return {}
 
             return {
@@ -521,7 +690,8 @@ class XhsAcquisitionService(BaseService):
                 "raw_text": raw_text,
                 "tags": detail.get("tags") or [],
                 "image_count": int(detail.get("image_count") or 0),
-                "source": "detail_page"
+                "source": "detail_page",
+                "comments": comments
             }
 
         except Exception as e:

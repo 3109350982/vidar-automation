@@ -1212,6 +1212,7 @@
                 <div class="tab" onclick="switchTab('videos',this)">📹 视频列表</div>
                 <div  class="tab" onclick="switchTab('users',this)">👥 用户列表（已回复的用户）</div>
                 <div class="tab" onclick="switchTab('agentReport',this)">🤖 Agent 报告</div>
+                <div class="tab" onclick="switchTab('agentReview',this)">🧠 候选库审核</div>
             </div>
             
             <div class="data-container">
@@ -1312,6 +1313,30 @@
                                 <div class="icon">🤖</div>
                                 <h3>暂无 Agent 报告</h3>
                                 <p>请先创建 Agent 会话，再读取采集数据生成报告</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- 候选库审核 -->
+                <div id="agentReviewTab" class="tab-content">
+                    <div class="data-toolbar">
+                        <div class="toolbar-left">
+                            <select id="candidateReviewStatus" style="padding:6px 10px;border:1px solid #e8e8e8;border-radius:6px;">
+                                <option value="pending">待审核</option>
+                                <option value="approved">已通过</option>
+                                <option value="rejected">已拒绝</option>
+                            </select>
+                            <button class="btn btn-secondary" id="agentLoadCandidatesBtn">刷新候选库</button>
+                            <button class="btn btn-secondary" id="agentLoadApprovedTermsBtn">刷新正式库</button>
+                            <button class="btn btn-secondary" id="agentLoadProjectMemoryBtn">刷新项目记忆</button>
+                        </div>
+                    </div>
+                    <div class="data-content">
+                        <div id="agentReviewContent" style="padding:20px;line-height:1.7;">
+                            <div class="empty-state">
+                                <div class="icon">🧠</div>
+                                <h3>暂无候选库数据</h3>
+                                <p>请先生成 Agent 报告并产生候选项，再刷新候选库</p>
                             </div>
                         </div>
                     </div>
@@ -1465,6 +1490,7 @@
                 'xhsCmtStartBtn','xhsCmtStopBtn',
                 'agentStartBtn','agentAnswerBtn','agentRunBtn','agentLoadReportBtn',
                 'agentRefreshSessionBtn','agentRefreshReportBtn',
+                'agentLoadCandidatesBtn','agentLoadApprovedTermsBtn','agentLoadProjectMemoryBtn',
                 'clearDataBtn','refreshVideosBtn','refreshUsersBtn','selectAllVideosBtn',
                 'clearVideosSelectionBtn','selectAllUsersBtn','clearUsersSelectionBtn'
             ];
@@ -1642,6 +1668,17 @@
 
             const agentRefreshReportBtn = document.getElementById('agentRefreshReportBtn');
             if (agentRefreshReportBtn) agentRefreshReportBtn.onclick = (e) => withBtnLock(e.currentTarget, loadAgentReport);
+            const agentLoadCandidatesBtn = document.getElementById('agentLoadCandidatesBtn');
+            if (agentLoadCandidatesBtn) agentLoadCandidatesBtn.onclick = (e) => withBtnLock(e.currentTarget, loadAgentCandidates);
+
+            const agentLoadApprovedTermsBtn = document.getElementById('agentLoadApprovedTermsBtn');
+            if (agentLoadApprovedTermsBtn) agentLoadApprovedTermsBtn.onclick = (e) => withBtnLock(e.currentTarget, loadAgentApprovedTerms);
+
+            const agentLoadProjectMemoryBtn = document.getElementById('agentLoadProjectMemoryBtn');
+            if (agentLoadProjectMemoryBtn) agentLoadProjectMemoryBtn.onclick = (e) => withBtnLock(e.currentTarget, loadAgentProjectMemory);
+
+            const candidateReviewStatus = document.getElementById('candidateReviewStatus');
+            if (candidateReviewStatus) candidateReviewStatus.onchange = () => loadAgentCandidates();
             const stopAllServicesBtn = document.getElementById('stopAllServicesBtn');
             if (stopAllServicesBtn) stopAllServicesBtn.onclick = (e) => withBtnLock(e.currentTarget, stopAllServices);
             
@@ -3341,6 +3378,344 @@
                 addLog('❌ 读取 Agent 报告异常：' + e, 'error');
             }
         }
+        function switchAgentReviewTab() {
+            const tab = [...document.querySelectorAll('.tabs .tab')]
+                .find(item => item.textContent.includes('候选库审核'));
+
+            if (tab) {
+                switchTab('agentReview', tab);
+            }
+        }
+
+        function getCurrentAgentProjectId() {
+            const inputValue = Number(document.getElementById('agentProjectId')?.value || 0);
+            return inputValue || currentAgentProjectId || 0;
+        }
+
+        function parseAgentReviewJson(text) {
+            if (!text) return [];
+            if (Array.isArray(text)) return text;
+            if (typeof text === 'object') return text;
+
+            try {
+                const data = JSON.parse(text);
+                return data || [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function renderAgentReviewLayout(candidates, approvedTerms, memories) {
+            const content = document.getElementById('agentReviewContent');
+            if (!content) return;
+
+            const projectId = getCurrentAgentProjectId();
+
+            content.innerHTML = `
+                <h2 style="margin-bottom:12px;">🧠 候选库审核</h2>
+                <div style="padding:12px;border:1px solid #e8e8e8;border-radius:8px;background:#fafafa;margin-bottom:14px;">
+                    <div><b>当前 project_id：</b>${escapeHTML(projectId || '')}</div>
+                    <div><b>说明：</b>候选项只有人工通过后才会进入正式库；证据数量少于 2 的候选项后端会拒绝通过。</div>
+                </div>
+
+                <h3 style="margin-bottom:8px;">待审核 / 已审核候选项</h3>
+                <div id="candidateTermsList" style="display:grid;gap:10px;margin-bottom:18px;">
+                    ${renderCandidateTerms(candidates || [])}
+                </div>
+
+                <h3 style="margin-bottom:8px;">正式库</h3>
+                <div id="approvedTermsList" style="display:grid;gap:10px;margin-bottom:18px;">
+                    ${renderApprovedTerms(approvedTerms || [])}
+                </div>
+
+                <h3 style="margin-bottom:8px;">项目记忆</h3>
+                <div style="padding:12px;border:1px solid #e8e8e8;border-radius:8px;background:#ffffff;margin-bottom:12px;">
+                    <div class="control-group compact-control">
+                        <label>记忆类型:</label>
+                        <select id="agentMemoryType">
+                            <option value="preferred_title_style">喜欢的标题方向</option>
+                            <option value="rejected_content_direction">拒绝的内容方向</option>
+                            <option value="account_style">账号风格</option>
+                            <option value="accepted_selling_point">接受过的卖点</option>
+                            <option value="manual_note">手动备注</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>记忆内容:</label>
+                        <textarea id="agentMemoryContent" placeholder="例如：更喜欢真实案例复盘类标题，不要过度夸张标题"></textarea>
+                    </div>
+                    <div class="button-group">
+                        <button class="btn btn-success" id="agentSaveMemoryBtn">💾 保存项目记忆</button>
+                    </div>
+                </div>
+                <div id="projectMemoryList" style="display:grid;gap:10px;">
+                    ${renderProjectMemory(memories || [])}
+                </div>
+            `;
+
+            const saveMemoryBtn = document.getElementById('agentSaveMemoryBtn');
+            if (saveMemoryBtn) saveMemoryBtn.onclick = (e) => withBtnLock(e.currentTarget, saveAgentProjectMemory);
+
+            switchAgentReviewTab();
+        }
+
+        function renderCandidateTerms(items) {
+            const list = Array.isArray(items) ? items : [];
+            if (list.length === 0) {
+                return `<div class="empty-state"><div class="icon">🧠</div><h3>暂无候选项</h3><p>当前筛选条件下没有候选项</p></div>`;
+            }
+
+            return list.map(item => {
+                const evidenceSamples = parseAgentReviewJson(item.evidence_samples || item.evidence_samples_json);
+                const evidenceHtml = Array.isArray(evidenceSamples) && evidenceSamples.length
+                    ? evidenceSamples.map(sample => `<li>${escapeHTML(typeof sample === 'string' ? sample : JSON.stringify(sample))}</li>`).join('')
+                    : '<li>暂无证据样例</li>';
+                const isPending = (item.review_status || '') === 'pending';
+                return `
+                    <div style="padding:12px;border:1px solid #e8e8e8;border-radius:8px;background:#ffffff;">
+                        <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+                            <div>
+                                <div style="font-weight:600;color:#1890ff;font-size:15px;">${escapeHTML(item.term || '')}</div>
+                                <div style="font-size:12px;color:#666;margin-top:4px;">类型：${escapeHTML(item.term_type || '')}｜行业：${escapeHTML(item.industry || '')}｜证据数：${escapeHTML(item.evidence_count || 0)}｜状态：${escapeHTML(item.review_status || '')}</div>
+                            </div>
+                            <div style="display:flex;gap:8px;flex-shrink:0;">
+                                <button class="btn btn-success" style="padding:8px 12px;" onclick="approveCandidateTerm(${Number(item.id || 0)})" ${isPending ? '' : 'disabled'}>通过</button>
+                                <button class="btn btn-danger" style="padding:8px 12px;" onclick="rejectCandidateTerm(${Number(item.id || 0)})" ${isPending ? '' : 'disabled'}>拒绝</button>
+                            </div>
+                        </div>
+                        <div style="margin-top:8px;font-size:13px;color:#555;"><b>AI 理由：</b>${escapeHTML(item.reason || '')}</div>
+                        <div style="margin-top:8px;font-size:13px;color:#555;"><b>证据样例：</b><ul style="margin-left:18px;margin-top:4px;">${evidenceHtml}</ul></div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderApprovedTerms(items) {
+            const list = Array.isArray(items) ? items : [];
+            if (list.length === 0) {
+                return `<div class="empty-state"><div class="icon">✅</div><h3>暂无正式词</h3><p>通过候选项后会进入正式库</p></div>`;
+            }
+
+            return list.map(item => {
+                const mapping = item.mapping || parseAgentReviewJson(item.mapping_json) || {};
+                return `
+                    <div style="padding:12px;border:1px solid #e8e8e8;border-radius:8px;background:#f8fff4;">
+                        <div style="font-weight:600;color:#389e0d;font-size:15px;">${escapeHTML(item.term || '')}</div>
+                        <div style="font-size:12px;color:#666;margin-top:4px;">类型：${escapeHTML(item.term_type || '')}｜行业：${escapeHTML(item.industry || '')}｜project_id：${escapeHTML(item.project_id || '')}｜创建时间：${escapeHTML(item.created_time || '')}</div>
+                        <pre style="white-space:pre-wrap;background:#ffffff;color:#333;padding:10px;border-radius:6px;line-height:1.5;margin-top:8px;max-height:140px;overflow:auto;">${escapeHTML(JSON.stringify(mapping, null, 2))}</pre>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderProjectMemory(items) {
+            const list = Array.isArray(items) ? items : [];
+            if (list.length === 0) {
+                return `<div class="empty-state"><div class="icon">📝</div><h3>暂无项目记忆</h3><p>保存后会在这里展示</p></div>`;
+            }
+
+            return list.map(item => `
+                <div style="padding:12px;border:1px solid #e8e8e8;border-radius:8px;background:#ffffff;">
+                    <div style="font-weight:600;color:#722ed1;">${escapeHTML(memoryTypeLabel(item.memory_type || ''))}</div>
+                    <div style="font-size:13px;color:#555;margin-top:6px;">${escapeHTML(item.content || '')}</div>
+                    <div style="font-size:12px;color:#999;margin-top:6px;">source_session_id：${escapeHTML(item.source_session_id || '')}｜创建时间：${escapeHTML(item.created_time || '')}</div>
+                </div>
+            `).join('');
+        }
+
+        function memoryTypeLabel(memoryType) {
+            const labels = {
+                preferred_title_style: '喜欢的标题方向',
+                rejected_content_direction: '拒绝的内容方向',
+                account_style: '账号风格',
+                accepted_selling_point: '接受过的卖点',
+                manual_note: '手动备注'
+            };
+            return labels[memoryType] || memoryType;
+        }
+
+        async function loadAgentReviewData() {
+            const candidates = await fetchAgentCandidates(false);
+            const approvedTerms = await fetchAgentApprovedTerms(false);
+            const memories = await fetchAgentProjectMemory(false);
+            renderAgentReviewLayout(candidates, approvedTerms, memories);
+        }
+
+        async function fetchAgentCandidates(showLog = true) {
+            const projectId = getCurrentAgentProjectId();
+            const status = document.getElementById('candidateReviewStatus')?.value || 'pending';
+            const url = `/api/agent/candidate_terms?review_status=${encodeURIComponent(status)}&project_id=${Number(projectId || 0)}&limit=100`;
+
+            try {
+                const response = await fetch(url);
+                const result = await response.json();
+                if (result.status !== 'success') {
+                    if (showLog) addLog('❌ ' + (result.message || '读取候选库失败'), 'error');
+                    return [];
+                }
+                if (showLog) addLog(`✅ 已读取候选库：${(result.data || []).length} 条`, 'success');
+                return result.data || [];
+            } catch (e) {
+                if (showLog) addLog('❌ 读取候选库异常：' + e, 'error');
+                return [];
+            }
+        }
+
+        async function fetchAgentApprovedTerms(showLog = true) {
+            const projectId = getCurrentAgentProjectId();
+            const url = `/api/agent/approved_terms?project_id=${Number(projectId || 0)}&limit=200`;
+
+            try {
+                const response = await fetch(url);
+                const result = await response.json();
+                if (result.status !== 'success') {
+                    if (showLog) addLog('❌ ' + (result.message || '读取正式库失败'), 'error');
+                    return [];
+                }
+                if (showLog) addLog(`✅ 已读取正式库：${(result.data || []).length} 条`, 'success');
+                return result.data || [];
+            } catch (e) {
+                if (showLog) addLog('❌ 读取正式库异常：' + e, 'error');
+                return [];
+            }
+        }
+
+        async function fetchAgentProjectMemory(showLog = true) {
+            const projectId = getCurrentAgentProjectId();
+            if (!projectId) {
+                if (showLog) addLog('❌ 缺少 project_id，无法读取项目记忆', 'error');
+                return [];
+            }
+
+            try {
+                const response = await fetch(`/api/agent/project_memory?project_id=${Number(projectId)}&limit=100`);
+                const result = await response.json();
+                if (result.status !== 'success') {
+                    if (showLog) addLog('❌ ' + (result.message || '读取项目记忆失败'), 'error');
+                    return [];
+                }
+                if (showLog) addLog(`✅ 已读取项目记忆：${(result.data || []).length} 条`, 'success');
+                return result.data || [];
+            } catch (e) {
+                if (showLog) addLog('❌ 读取项目记忆异常：' + e, 'error');
+                return [];
+            }
+        }
+
+        async function loadAgentCandidates() {
+            const candidates = await fetchAgentCandidates(true);
+            const approvedTerms = await fetchAgentApprovedTerms(false);
+            const memories = await fetchAgentProjectMemory(false);
+            renderAgentReviewLayout(candidates, approvedTerms, memories);
+        }
+
+        async function loadAgentApprovedTerms() {
+            const candidates = await fetchAgentCandidates(false);
+            const approvedTerms = await fetchAgentApprovedTerms(true);
+            const memories = await fetchAgentProjectMemory(false);
+            renderAgentReviewLayout(candidates, approvedTerms, memories);
+        }
+
+        async function loadAgentProjectMemory() {
+            const candidates = await fetchAgentCandidates(false);
+            const approvedTerms = await fetchAgentApprovedTerms(false);
+            const memories = await fetchAgentProjectMemory(true);
+            renderAgentReviewLayout(candidates, approvedTerms, memories);
+        }
+
+        async function approveCandidateTerm(candidateId) {
+            if (!candidateId) {
+                addLog('❌ 缺少 candidate_id', 'error');
+                return;
+            }
+
+            const mappingText = prompt('可选：填写映射说明 JSON 或普通备注，直接确定则为空', '');
+            let mapping = {};
+            if (mappingText && mappingText.trim()) {
+                try {
+                    mapping = JSON.parse(mappingText);
+                } catch (e) {
+                    mapping = { note: mappingText.trim() };
+                }
+            }
+
+            const result = await apiCall('/api/agent/candidate_terms/approve', {
+                body: JSON.stringify({
+                    candidate_id: Number(candidateId),
+                    mapping: mapping
+                })
+            });
+
+            if (result.status !== 'success') {
+                addLog('❌ ' + (result.message || '通过候选项失败'), 'error');
+                return;
+            }
+
+            addLog('✅ ' + (result.message || '候选项已通过'), 'success');
+            await loadAgentCandidates();
+        }
+
+        async function rejectCandidateTerm(candidateId) {
+            if (!candidateId) {
+                addLog('❌ 缺少 candidate_id', 'error');
+                return;
+            }
+
+            if (!confirm('确认拒绝这个候选项吗？')) {
+                return;
+            }
+
+            const result = await apiCall('/api/agent/candidate_terms/reject', {
+                body: JSON.stringify({
+                    candidate_id: Number(candidateId)
+                })
+            });
+
+            if (result.status !== 'success') {
+                addLog('❌ ' + (result.message || '拒绝候选项失败'), 'error');
+                return;
+            }
+
+            addLog('✅ ' + (result.message || '候选项已拒绝'), 'success');
+            await loadAgentCandidates();
+        }
+
+        async function saveAgentProjectMemory() {
+            const projectId = getCurrentAgentProjectId();
+            const sessionId = getCurrentAgentSessionId();
+            const memoryType = document.getElementById('agentMemoryType')?.value || '';
+            const content = (document.getElementById('agentMemoryContent')?.value || '').trim();
+
+            if (!projectId) {
+                addLog('❌ 缺少 project_id，无法保存项目记忆', 'error');
+                return;
+            }
+
+            if (!content) {
+                addLog('❌ 请填写项目记忆内容', 'error');
+                return;
+            }
+
+            const result = await apiCall('/api/agent/project_memory', {
+                body: JSON.stringify({
+                    project_id: Number(projectId),
+                    memory_type: memoryType,
+                    content: content,
+                    source_session_id: sessionId || null
+                })
+            });
+
+            if (result.status !== 'success') {
+                addLog('❌ ' + (result.message || '保存项目记忆失败'), 'error');
+                return;
+            }
+
+            addLog('✅ 项目记忆已保存', 'success');
+            const memoryContent = document.getElementById('agentMemoryContent');
+            if (memoryContent) memoryContent.value = '';
+            await loadAgentProjectMemory();
+        }
+
         async function openXhsHome() {
             addLog('🌐 打开小红书首页...', 'info');
             const result = await apiCall('/api/xhs/open_home');
@@ -3356,8 +3731,6 @@
             const sortType = document.getElementById('xhsSortType').value;
             const perKw = parseInt(document.getElementById('xhsPerKeyword').value || '5', 10);
             const duration = parseInt(document.getElementById('xhsDuration').value || '10', 10);
-            const agentSessionId = getCurrentAgentSessionId();
-            const agentProjectId = Number(document.getElementById('agentProjectId')?.value || currentAgentProjectId || 0);
 
             if (!keywords) {
                 addLog('❌ 请输入关键词', 'error');
@@ -3365,18 +3738,12 @@
             }
 
             addLog(`🚀 小红书采集：关键词=${keywords}，模式=${sortType}，每词=${perKw}`, 'info');
-            if (agentSessionId > 0) {
-                addLog(`🤖 本次采集将绑定 Agent session_id=${agentSessionId}，并进入笔记详情页采集正文`, 'info');
-            }
-
             const result = await apiCall('/api/xhs/collect/start', {
                 body: JSON.stringify({
                     keywords,
                     sort_type: sortType,
                     videos_per_keyword: perKw,
-                    duration: duration,
-                    agent_session_id: Number(agentSessionId || 0),
-                    project_id: Number(agentProjectId || 0)
+                    duration: duration
                 })
             });
 

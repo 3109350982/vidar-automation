@@ -28,6 +28,9 @@ debug/
 # Local license cache
 license_cache.json
 
+# Local test files
+test_ai_provider.py
+
 # OS / editor
 .DS_Store
 Thumbs.db
