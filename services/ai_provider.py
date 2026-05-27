@@ -20,8 +20,8 @@ class AIProvider:
         self.provider = os.getenv("AI_PROVIDER", "deepseek").strip().lower()
         self.model = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash").strip()
         self.base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip()
-        self.max_output_tokens = int(os.getenv("AI_MAX_OUTPUT_TOKENS", "3000"))
-        self.max_calls_per_agent_run = int(os.getenv("AI_MAX_CALLS_PER_AGENT_RUN", "5"))
+        self.max_output_tokens = int(os.getenv("AI_MAX_OUTPUT_TOKENS", "10000"))
+        self.max_calls_per_agent_run = int(os.getenv("AI_MAX_CALLS_PER_AGENT_RUN", "8"))
         self.openai_fallback_enabled = os.getenv("OPENAI_FALLBACK_ENABLED", "false").strip().lower() == "true"
 
         self.api_key = self._load_api_key()

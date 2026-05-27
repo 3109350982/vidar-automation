@@ -53,8 +53,8 @@ class ClarifyingQuestionResult(BaseModel):
 
     @validator("questions")
     def validate_question_count(cls, value):
-        if len(value) > 3:
-            raise ValueError("反问问题最多 3 条")
+        if len(value) > 5:
+            raise ValueError("反问问题最多 5 条")
         return value
 
 
@@ -88,8 +88,8 @@ class ProfileParseResult(BaseModel):
 
     @validator("questions")
     def validate_question_count(cls, value):
-        if len(value) > 3:
-            raise ValueError("反问问题最多 3 条")
+        if len(value) > 5:
+            raise ValueError("反问问题最多 5 条")
         return value
 
 

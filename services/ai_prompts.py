@@ -24,7 +24,7 @@ INTENT_PARSE_PROMPT = """
    - personal_account：个人账号运营
    - customer_acquisition：获客
 3. 判断还缺哪些关键字段。
-4. 最多提出 3 个反问问题。
+4. 最多提出 5 个反问问题。
 5. 不要编造确定事实。用户没有提供的信息，用空字符串。
 6. 行业库仅作为参考，不得把行业库内容当作本次采集结论。
 
@@ -54,7 +54,7 @@ INTENT_PARSE_PROMPT = """
 
 字段要求：
 - route 必须和输入 route 一致。
-- questions 最多 3 条。
+- questions 最多 5 条。
 - 个人账号运营路线优先补全：industry、service、target_customer、account_style。
 - 获客路线优先补全：industry、service、city、target_customer、customer_type。
 """
@@ -65,7 +65,7 @@ CLARIFYING_QUESTION_PROMPT = """
 
 任务：
 1. 根据当前项目画像和缺失字段，生成反问问题。
-2. 最多返回 3 个问题。
+2. 最多返回 5 个问题。
 3. 每个问题只问一个字段。
 4. 问题必须让普通商家能直接回答。
 5. 不要询问与第一版无关的平台，不要询问抖音、快手、知乎、B站、美团。
@@ -164,7 +164,7 @@ NOTE_ANALYSIS_PROMPT = """
 评分规则：
 - content_score 范围 0 到 100。
 - 高互动不等于内容质量高，必须结合标题、正文内容、主题、互动数据和匹配关键词。
-- content_summary 只输出 30 到 80 字摘要，不输出完整正文。
+- content_summary 只输出 30 到 100 字摘要，不输出完整正文。
 """
 
 
